@@ -1,0 +1,130 @@
+{
+  "scan_timestamp": "2025-08-14T19:26:19.430973",
+  "tools": {
+    "sbom_generator": "Syft",
+    "vulnerability_scanner": "Trivy"
+  },
+  "summary": {
+    "total_components": 3,
+    "vulnerable_components": 1,
+    "total_vulnerabilities": 2,
+    "severity_breakdown": {
+      "CRITICAL": 2,
+      "HIGH": 0,
+      "MEDIUM": 0,
+      "LOW": 0,
+      "UNKNOWN": 0
+    }
+  },
+  "components": [
+    {
+      "name": "email",
+      "version": "3.11.3",
+      "type": "library",
+      "language": "pypi",
+      "purl": "pkg:pypi/email@3.11.3",
+      "cpe": "cpe:2.3:a:email:email:3.11.3:*:*:*:*:*:*:*",
+      "locations": []
+    },
+    {
+      "name": "pyyaml",
+      "version": "5.3",
+      "type": "library",
+      "language": "pypi",
+      "purl": "pkg:pypi/pyyaml@5.3",
+      "cpe": "cpe:2.3:a:pyyaml:pyyaml:5.3:*:*:*:*:*:*:*",
+      "locations": []
+    },
+    {
+      "name": "python_vuln_app",
+      "version": "",
+      "type": "library",
+      "language": null,
+      "purl": null,
+      "cpe": null,
+      "locations": []
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2020-14343",
+      "package_name": "pyyaml",
+      "package_version": "5.3",
+      "severity": "CRITICAL",
+      "title": "PyYAML: incomplete fix for CVE-2020-1747",
+      "description": "A vulnerability was discovered in the PyYAML library in versions before 5.4, where it is susceptible to arbitrary code execution when it processes untrusted YAML files through the full_load method or with the FullLoader loader. Applications that use the library to process untrusted input may be vulnerable to this flaw. This flaw allows an attacker to execute arbitrary code on the system by abusing the python/object/new constructor. This flaw is due to an incomplete fix for CVE-2020-1747.",
+      "fixed_version": "5.4",
+      "cvss_score": 9.8,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "cwe_ids": [
+        "CWE-20"
+      ],
+      "references": [
+        "https://access.redhat.com/security/cve/CVE-2020-14343",
+        "https://bugzilla.redhat.com/show_bug.cgi?id=1860466",
+        "https://errata.almalinux.org/8/ALSA-2021-2583.html",
+        "https://github.com/SeldonIO/seldon-core/issues/2252",
+        "https://github.com/advisories/GHSA-8q59-q68h-6hv4",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/pyyaml/PYSEC-2021-142.yaml",
+        "https://github.com/yaml/pyyaml",
+        "https://github.com/yaml/pyyaml/commit/a001f2782501ad2d24986959f0239a354675f9dc",
+        "https://github.com/yaml/pyyaml/issues/420",
+        "https://github.com/yaml/pyyaml/issues/420#issuecomment-663673966",
+        "https://github.com/yaml/pyyaml/wiki/PyYAML-yaml.load(input)-Deprecation",
+        "https://linux.oracle.com/cve/CVE-2020-14343.html",
+        "https://linux.oracle.com/errata/ELSA-2021-2583.html",
+        "https://nvd.nist.gov/vuln/detail/CVE-2020-14343",
+        "https://pypi.org/project/PyYAML",
+        "https://ubuntu.com/security/notices/USN-4940-1",
+        "https://www.cve.org/CVERecord?id=CVE-2020-14343",
+        "https://www.oracle.com/security-alerts/cpuapr2022.html",
+        "https://www.oracle.com/security-alerts/cpujul2022.html"
+      ],
+      "primary_url": "https://avd.aquasec.com/nvd/cve-2020-14343"
+    },
+    {
+      "id": "CVE-2020-1747",
+      "package_name": "pyyaml",
+      "package_version": "5.3",
+      "severity": "CRITICAL",
+      "title": "PyYAML: arbitrary command execution through python/object/new when FullLoader is used",
+      "description": "A vulnerability was discovered in the PyYAML library in versions before 5.3.1, where it is susceptible to arbitrary code execution when it processes untrusted YAML files through the full_load method or with the FullLoader loader. Applications that use the library to process untrusted input may be vulnerable to this flaw. An attacker could use this flaw to execute arbitrary code on the system by abusing the python/object/new constructor.",
+      "fixed_version": "5.3.1",
+      "cvss_score": 9.8,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "cwe_ids": [
+        "CWE-20"
+      ],
+      "references": [
+        "http://lists.opensuse.org/opensuse-security-announce/2020-04/msg00017.html",
+        "http://lists.opensuse.org/opensuse-security-announce/2020-05/msg00017.html",
+        "https://access.redhat.com/security/cve/CVE-2020-1747",
+        "https://bugzilla.redhat.com/show_bug.cgi?id=CVE-2020-1747",
+        "https://errata.almalinux.org/8/ALSA-2020-4641.html",
+        "https://github.com/advisories/GHSA-6757-jp84-gxfx",
+        "https://github.com/github/advisory-database/pull/4942",
+        "https://github.com/pypa/advisory-database/tree/main/vulns/pyyaml/PYSEC-2020-96.yaml",
+        "https://github.com/yaml/pyyaml",
+        "https://github.com/yaml/pyyaml/commit/0cedb2a0697b2bc49e4f3841b8d4590b6b15657e",
+        "https://github.com/yaml/pyyaml/commit/5080ba513377b6355a0502104846ee804656f1e0",
+        "https://github.com/yaml/pyyaml/pull/386",
+        "https://linux.oracle.com/cve/CVE-2020-1747.html",
+        "https://linux.oracle.com/errata/ELSA-2020-4641.html",
+        "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/7PPAS6C4SZRDQLR7C22A5U3QOLXY33JX/",
+        "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/K5HEPD7LEVDPCITY5IMDYWXUMX37VFMY/",
+        "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/MMQXSZXNJT6ERABJZAAICI3DQSQLCP3D/",
+        "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/WORRFHPQVAFKKXXWLSSW6XKUYLWM6CSH/",
+        "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/ZBJA3SGNJKCAYPSHOHWY3KBCWNM5NYK2/",
+        "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/7PPAS6C4SZRDQLR7C22A5U3QOLXY33JX",
+        "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/K5HEPD7LEVDPCITY5IMDYWXUMX37VFMY",
+        "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/MMQXSZXNJT6ERABJZAAICI3DQSQLCP3D",
+        "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/WORRFHPQVAFKKXXWLSSW6XKUYLWM6CSH",
+        "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/ZBJA3SGNJKCAYPSHOHWY3KBCWNM5NYK2",
+        "https://nvd.nist.gov/vuln/detail/CVE-2020-1747",
+        "https://www.cve.org/CVERecord?id=CVE-2020-1747",
+        "https://www.oracle.com/security-alerts/cpujul2022.html"
+      ],
+      "primary_url": "https://avd.aquasec.com/nvd/cve-2020-1747"
+    }
+  ]
+}
