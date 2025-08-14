@@ -75,7 +75,7 @@ pip install requests
 ## 🛠️ Installation
 
 ```bash
-git clone https://github.com/yourusername/vulnreach.git
+git clone https://github.com/ihrishikesh0896/vulnreach.git
 cd vulnreach
 pip install -r requirements.txt
 ```
@@ -286,7 +286,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ### Development Setup
 ```bash
-git clone https://github.com/yourusername/vulnreach.git
+git clone https://github.com/ihrishikesh0896/vulnreach.git
 cd vulnreach
 pip install -e .
 ```
@@ -309,9 +309,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/yourusername/vulnreach/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/yourusername/vulnreach/discussions)
-- 📚 **Documentation**: [Wiki](https://github.com/yourusername/vulnreach/wiki)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/ihrishikesh0896/vulnreach/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/ihrishikesh0896/vulnreach/discussions)
 
 ---
 
@@ -319,6 +318,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ for security-conscious developers**
 
-[⭐ Star us on GitHub](https://github.com/yourusername/vulnreach) | [📖 Read the Docs](https://vulnreach.readthedocs.io) | [💬 Join the Discussion](https://github.com/yourusername/vulnreach/discussions)
+[⭐ Star us on GitHub](https://github.com/ihrishikesh0896/vulnreach)  | [💬 Join the Discussion](https://github.com/ihrishikesh0896/vulnreach/discussions)
 
 </div>
