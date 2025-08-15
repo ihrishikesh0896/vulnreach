@@ -1,2 +1,46 @@
-PyYAML==5.3
-email==3.11.3
+# Requirements file with intentionally vulnerable package versions
+# FOR TESTING SBOM/SCA TOOLS ONLY - DO NOT USE IN PRODUCTION
+
+# Web framework with known vulnerabilities in older versions
+Flask==2.0.1
+Werkzeug==2.0.1
+
+# Template engine with potential vulnerabilities
+Jinja2==2.11.3
+MarkupSafe==1.1.1
+
+# HTTP library with older version
+requests==2.25.1
+urllib3==1.26.5
+certifi==2020.12.5
+
+# YAML parser with known security issues in older versions
+PyYAML==5.4.1
+
+# Serialization library with security concerns
+pickle-mixin==1.0.2
+
+# XML processing with potential vulnerabilities
+lxml==4.6.3
+
+# Cryptography with older version
+cryptography==3.4.8
+cffi==1.14.6
+
+# JSON Web Token library with older version
+PyJWT==1.7.1
+
+# SQL toolkit with older version
+SQLAlchemy==1.3.24
+
+# Date/time library
+python-dateutil==2.8.1
+
+# Additional potentially vulnerable packages
+Pillow==8.2.0
+numpy==1.20.3
+pandas==1.2.5
+
+# Development/testing tools
+pytest==6.2.4
+coverage==5.5
