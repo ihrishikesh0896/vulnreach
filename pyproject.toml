@@ -1,0 +1,42 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vulnreach"
+version = "1.0.0"
+description = "vulnreach combines Syft and Trivy to detect vulnerabilities and assess their actual exploitability through reachability analysis."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Hrishikesh Nate", email = "ihrishikeshnate@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "requests",
+]
+
+[project.scripts]
+vulnreach-scan = "tracer_:main"
+vuln-scan = "tracer_:main"
+
+[project.urls]
+Homepage = "https://github.com/ihrishikesh0896/vulnreach"
+Repository = "https://github.com/ihrishikesh0896/vulnreach"
+Issues = "https://github.com/ihrishikesh0896/vulnreach/issues"
+
+[tool.setuptools.packages.find]
+include = ["*"]
+exclude = ["tests*","security*","js_app*",".venv"]
