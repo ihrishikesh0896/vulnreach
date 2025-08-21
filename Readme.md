@@ -32,9 +32,10 @@ Traditional vulnerability scanners overwhelm you with alerts, but VulnReach answ
 - **Multi-format Support**: SPDX, CycloneDX, and Syft native formats
 
 ### 🧠 **Intelligent Reachability Analysis**
-- **Static Code Analysis**: Parses your entire codebase using AST analysis
-- **Usage Pattern Detection**: Identifies imports, function calls, and attribute access
-- **Dynamic Package Mapping**: Handles complex import-to-package mappings (e.g., `import yaml` → `PyYAML`)
+- **Multi-Language Support**: Python and Java projects with automatic language detection
+- **Static Code Analysis**: Parses your entire codebase using AST analysis (Python) or regex patterns (Java)
+- **Usage Pattern Detection**: Identifies imports, function calls, method calls, and instantiations
+- **Dynamic Package Mapping**: Handles complex import-to-package mappings (e.g., `import yaml` → `PyYAML`, `org.apache.commons` → `commons-lang3`)
 
 ### 📊 **Risk Prioritization**
 - **CRITICAL**: Actively used across multiple files with direct function calls
@@ -74,10 +75,23 @@ pip install requests
 
 ## 🛠️ Installation
 
+### Option 1: Install from PyPI (Recommended)
+```bash
+pip install vulnreach
+```
+
+### Option 2: Install from Source
 ```bash
 git clone https://github.com/ihrishikesh0896/vulnreach.git
 cd vulnreach
-pip install -r requirements.txt
+pip install -e .
+```
+
+### Option 3: Development Setup
+```bash
+git clone https://github.com/ihrishikesh0896/vulnreach.git
+cd vulnreach
+pip install -e ".[dev]"
 ```
 
 ## 🚀 Quick Start
@@ -85,28 +99,35 @@ pip install -r requirements.txt
 ### Basic Vulnerability Scan
 ```bash
 # Scan your project directory
-python security_sca_tool.py /path/to/your/project
+vulnreach /path/to/your/project
 
 # Generate comprehensive report
-python security_sca_tool.py /path/to/your/project --output-report security_report.json
+vulnreach /path/to/your/project --output-report security_report.json
+
+# Alternative command
+vulnreach-scan /path/to/your/project
 ```
 
 ### With Reachability Analysis (Recommended)
 ```bash
-# Full analysis with reachability insights
-python security_sca_tool.py /path/to/your/project --run-reachability
+# Full analysis with multi-language reachability insights
+vulnreach /path/to/your/project --run-reachability
+
+# Supports Python and Java projects automatically
+# Python: Analyzes .py files using AST parsing
+# Java: Analyzes .java files using regex patterns
 ```
 
 ### Advanced Usage
 ```bash
 # Use existing SBOM
-python security_sca_tool.py --sbom existing_sbom.json --run-reachability
+vulnreach --sbom existing_sbom.json --run-reachability
 
 # Save SBOM for reuse
-python security_sca_tool.py /path/to/project --output-sbom project_sbom.json --run-reachability
+vulnreach /path/to/project --output-sbom project_sbom.json --run-reachability
 
 # Direct scan (skip SBOM generation)
-python security_sca_tool.py /path/to/project --direct-scan --run-reachability
+vulnreach /path/to/project --direct-scan --run-reachability
 ```
 
 ## 📊 Sample Output
@@ -264,7 +285,7 @@ jobs:
       
       - name: Run VulnReach Analysis
         run: |
-          python security_sca_tool.py . --run-reachability
+          vulnreach . --run-reachability
           
       - name: Upload Security Reports
         uses: actions/upload-artifact@v3

@@ -1,4 +1,3 @@
-# pyproject.toml
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -6,37 +5,106 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vulnreach"
 version = "1.0.0"
-description = "vulnreach combines Syft and Trivy to detect vulnerabilities and assess their actual exploitability through reachability analysis."
+description = "Smart Vulnerability Reachability Analyzer - Beyond version checking"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Hrishikesh Nate", email = "ihrishikeshnate@gmail.com"}
+    {name = "VulnReach Team", email = "contact@vulnreach.dev"}
 ]
+maintainers = [
+    {name = "VulnReach Team", email = "contact@vulnreach.dev"}
+]
+keywords = ["security", "vulnerability", "sca", "sbom", "reachability"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: System :: Systems Administration",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 dependencies = [
-    "requests",
+    "requests>=2.25.0",
 ]
 
-[project.scripts]
-vulnreach-scan = "tracer_:main"
-vuln-scan = "tracer_:main"
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=22.0",
+    "flake8>=4.0",
+    "mypy>=0.900",
+]
 
 [project.urls]
 Homepage = "https://github.com/ihrishikesh0896/vulnreach"
-Repository = "https://github.com/ihrishikesh0896/vulnreach"
-Issues = "https://github.com/ihrishikesh0896/vulnreach/issues"
+Documentation = "https://github.com/ihrishikesh0896/vulnreach#readme"
+Repository = "https://github.com/ihrishikesh0896/vulnreach.git"
+"Bug Tracker" = "https://github.com/ihrishikesh0896/vulnreach/issues"
+
+[project.scripts]
+vulnreach = "vulnreach.cli:main"
+vulnreach-scan = "vulnreach.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["*"]
-exclude = ["tests*","security*","js_app*",".venv"]
+where = ["."]
+include = ["vulnreach*", "utils*"]
+exclude = ["tests*", "security_findings*"]
+
+[tool.setuptools.package-data]
+vulnreach = ["*.json", "*.yaml", "*.yml"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | security_findings
+)/
+'''
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["requests.*"]
+ignore_missing_imports = true

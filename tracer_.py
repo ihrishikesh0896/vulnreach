@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import requests
 from utils.vuln_reachability_analyzer import run_reachability_analysis
+from utils.multi_language_analyzer import run_multi_language_analysis
 
 
 @dataclass
@@ -665,7 +666,7 @@ Examples:
                         help='Output path for consolidated fixed-version recommendations (default: consolidated.json)',
                         default='consolidated.json')
     parser.add_argument('--run-reachability', action='store_true',
-                        help='Run vulnerability reachability analysis after security scan')
+                        help='Run multi-language vulnerability reachability analysis after security scan')
 
     args = parser.parse_args()
 
@@ -775,10 +776,10 @@ Examples:
 
         # Run reachability analysis if requested
         if args.run_reachability:
-            print("\n🔍 Running vulnerability reachability analysis...")
-            reachability_output = os.path.join(project_findings_dir, "vulnerability_reachability_report.json")
-            run_reachability_analysis(args.target or ".", args.output_consolidated, reachability_output)
-            print(f"📊 Reachability analysis saved to: {reachability_output}")
+            print("\n🔍 Running multi-language vulnerability reachability analysis...")
+            detected_language = run_multi_language_analysis(args.target or ".", args.output_consolidated, project_findings_dir)
+            print(f"📊 Reachability analysis completed for {detected_language.upper()} project")
+            print(f"📁 Reports saved to: {project_findings_dir}")
 
         # Exit with appropriate code based on findings
         critical_high_vulns = len([v for v in vulnerabilities
