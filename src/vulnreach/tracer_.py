@@ -14,7 +14,12 @@ Prerequisites:
 Dependencies:
 pip install requests
 """
-
+from vulnreach.utils import (
+    multi_language_analyzer,
+    vuln_reachability_analyzer,
+    java_reachability_analyzer,
+    # run_multi_language_analysis
+)
 import os
 import json
 import sys
@@ -22,14 +27,9 @@ import argparse
 import subprocess
 import tempfile
 import shutil
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime
-import requests
-from utils.vuln_reachability_analyzer import run_reachability_analysis
-from utils.multi_language_analyzer import run_multi_language_analysis
-
 
 @dataclass
 class Component:
@@ -624,7 +624,7 @@ def get_project_name(target_path: str) -> str:
 
 def create_security_findings_dir(project_name: str) -> str:
     """Create security_findings directory structure and return the project path"""
-    base_dir = "security_findings"
+    base_dir = "../security_findings"
     project_dir = os.path.join(base_dir, project_name)
 
     # Create directories if they don't exist

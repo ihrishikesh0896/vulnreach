@@ -9,10 +9,10 @@ description = "Smart Vulnerability Reachability Analyzer - Beyond version checki
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "VulnReach Team", email = "contact@vulnreach.dev"}
+    {name = "Hrishikesh Nate", email = "ihrishikeshnate@gmail.com"}
 ]
 maintainers = [
-    {name = "VulnReach Team", email = "contact@vulnreach.dev"}
+    {name = "Hrishikesh Nate", email = "ihrishikeshnate@gmail.com"}
 ]
 keywords = ["security", "vulnerability", "sca", "sbom", "reachability"]
 classifiers = [
@@ -55,9 +55,10 @@ Repository = "https://github.com/ihrishikesh0896/vulnreach.git"
 vulnreach = "vulnreach.cli:main"
 vulnreach-scan = "vulnreach.cli:main"
 
+
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["vulnreach*", "utils*"]
+where = ["src"]
+include = ["vulnreach*"]
 exclude = ["tests*", "security_findings*"]
 
 [tool.setuptools.package-data]

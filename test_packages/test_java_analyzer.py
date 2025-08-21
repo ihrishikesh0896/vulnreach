@@ -5,9 +5,8 @@ Test script for Java Reachability Analyzer
 
 import json
 import tempfile
-import os
 from pathlib import Path
-from utils.java_reachability_analyzer import JavaReachabilityAnalyzer
+from src.vulnreach.utils import JavaReachabilityAnalyzer
 
 def create_test_java_project():
     """Create a temporary Java project for testing."""

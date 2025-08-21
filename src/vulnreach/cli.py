@@ -6,14 +6,13 @@ Entry point for the vulnreach command-line tool.
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add the project root to Python path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from tracer_ import main as tracer_main
+from vulnreach.tracer_ import main as tracer_main
 
 def main():
     """Main CLI entry point."""
