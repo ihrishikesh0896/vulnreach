@@ -85,28 +85,28 @@ pip install -r requirements.txt
 ### Basic Vulnerability Scan
 ```bash
 # Scan your project directory
-python security_sca_tool.py /path/to/your/project
+python tracer_.py /path/to/your/project
 
 # Generate comprehensive report
-python security_sca_tool.py /path/to/your/project --output-report security_report.json
+python tracer_.py /path/to/your/project --output-report security_report.json
 ```
 
 ### With Reachability Analysis (Recommended)
 ```bash
 # Full analysis with reachability insights
-python security_sca_tool.py /path/to/your/project --run-reachability
+python tracer_.py /path/to/your/project --run-reachability
 ```
 
 ### Advanced Usage
 ```bash
 # Use existing SBOM
-python security_sca_tool.py --sbom existing_sbom.json --run-reachability
+python tracer_.py --sbom existing_sbom.json --run-reachability
 
 # Save SBOM for reuse
-python security_sca_tool.py /path/to/project --output-sbom project_sbom.json --run-reachability
+python tracer_.py /path/to/project --output-sbom project_sbom.json --run-reachability
 
 # Direct scan (skip SBOM generation)
-python security_sca_tool.py /path/to/project --direct-scan --run-reachability
+python tracer_.py /path/to/project --direct-scan --run-reachability
 ```
 
 ## 📊 Sample Output
@@ -156,7 +156,7 @@ Not reachable: 12
 
 ```
 vulnreach/
-├── security_sca_tool.py           # Main CLI tool
+├── tracer_.py           # Main CLI tool
 ├── utils/
 │   ├── vuln_reachability_analyzer.py   # Core reachability analysis
 │   └── get_metadata.py             # Dynamic package mapping
@@ -264,7 +264,7 @@ jobs:
       
       - name: Run VulnReach Analysis
         run: |
-          python security_sca_tool.py . --run-reachability
+          python tracer_.py . --run-reachability
           
       - name: Upload Security Reports
         uses: actions/upload-artifact@v3
