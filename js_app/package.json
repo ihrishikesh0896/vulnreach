@@ -2,7 +2,7 @@
   "name": "vulnerable-js-app",
   "version": "1.0.0",
   "dependencies": {
-    "lodash": "4.17.12",
+    "lodash": "4.17.21",
     "express": "4.17.1"
   }
 }
