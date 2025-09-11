@@ -13,6 +13,7 @@ tests/
 test_packages
 vulnreach-dashboard/
 develop-eggs/
+.claude/
 dist/
 downloads/
 eggs/
