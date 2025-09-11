@@ -34,6 +34,9 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "requests>=2.25.0",
+    "Flask",
+    "jinja2>=3.0.0",
+    "pandas>=1.3.0",
 ]
 
 [project.optional-dependencies]
@@ -42,8 +45,12 @@ dev = [
     "pytest-cov>=2.0",
     "black>=22.0",
     "flake8>=4.0",
-    "mypy>=0.900",
-]
+    "mypy>=0.900"]
+web = [
+    "flask>=2.0.0",
+    "gunicorn>=20.0.0"]
+
+export = ["jinja2>=3.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/ihrishikesh0896/vulnreach"

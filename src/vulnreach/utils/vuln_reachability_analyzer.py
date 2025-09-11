@@ -697,7 +697,7 @@ def _print_analysis_summary(report: Dict):
 
     # Show critical and high vulnerabilities
     for vuln in report["vulnerabilities"]:
-        if vuln["critprimeicality"] in ["CRITICAL", "HIGH"]:
+        if vuln["criticality"] in ["CRITICAL", "HIGH"]:
             print(f"🚨 {vuln['criticality']}: {vuln['package_name']} v{vuln['installed_version']}")
             print(f"   Reason: {vuln['risk_reason']}")
             print(f"   Upgrade to: {vuln['recommended_version']}")

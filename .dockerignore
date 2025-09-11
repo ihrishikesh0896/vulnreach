@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Environment
+env/
+venv/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results
+security_findings/
+test_packages/
+
+# Documentation
+*.md
+!README.md
