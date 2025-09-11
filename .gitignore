@@ -9,6 +9,9 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+tests/
+test_packages
+vulnreach-dashboard/
 develop-eggs/
 dist/
 downloads/
