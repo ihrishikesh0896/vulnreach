@@ -14,7 +14,13 @@ Prerequisites:
 Dependencies:
 pip install requests
 """
-
+from vulnreach.utils import (
+    multi_language_analyzer,
+    vuln_reachability_analyzer,
+    java_reachability_analyzer,
+)
+from vulnreach.utils.multi_language_analyzer import run_multi_language_analysis
+from vulnreach.utils.exploitability_analyzer import ExploitabilityAnalyzer
 import os
 import json
 import sys
@@ -22,13 +28,12 @@ import argparse
 import subprocess
 import tempfile
 import shutil
-from pathlib import Path
+import re
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime
-import requests
-from utils.vuln_reachability_analyzer import run_reachability_analysis
-
+import time
+from urllib.parse import urlparse
 
 @dataclass
 class Component:
@@ -410,7 +415,7 @@ class SecurityReporter:
 
     @staticmethod
     def generate_report(components: List[Component], vulnerabilities: List[Vulnerability],
-                        output_path: str = None) -> Dict:
+                        output_path: str = None, scan_duration: float = None) -> Dict:
         """Generate comprehensive security report"""
 
         # Organize vulnerabilities by severity
@@ -423,6 +428,7 @@ class SecurityReporter:
 
         report = {
             "scan_timestamp": datetime.now().isoformat(),
+            "scan_duration": scan_duration,
             "tools": {
                 "sbom_generator": "Syft",
                 "vulnerability_scanner": "Trivy"
@@ -484,7 +490,12 @@ class SecurityReporter:
         summary = report["summary"]
         tools = report["tools"]
 
+        # Add scan duration to report
+        scan_duration = report.get("scan_duration", 0)
+
         print(f"📊 Scan completed at: {report['scan_timestamp']}")
+        if scan_duration and scan_duration > 0:
+            print(f"⏱️  Scan duration: {scan_duration:.2f} seconds")
         print(f"🔧 SBOM Generator: {tools['sbom_generator']}")
         print(f"🔍 Vulnerability Scanner: {tools['vulnerability_scanner']}")
         print()
@@ -547,6 +558,9 @@ def check_prerequisites():
     if not shutil.which('trivy'):
         missing_tools.append("Trivy")
 
+    if not shutil.which('git'):
+        missing_tools.append("Git")
+
     if missing_tools:
         print("❌ Missing required tools:")
         for tool in missing_tools:
@@ -555,9 +569,107 @@ def check_prerequisites():
         print(
             "Syft: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin")
         print("Trivy: https://aquasecurity.github.io/trivy/latest/getting-started/installation/")
+        print("Git: https://git-scm.com/downloads")
         return False
 
     return True
+
+
+def is_git_url(target: str) -> bool:
+    """Check if the target is a git URL"""
+    if not target:
+        return False
+    
+    # Check for common git URL patterns
+    git_patterns = [
+        r'^https?://.*\.git$',  # https://github.com/user/repo.git
+        r'^https?://github\.com/[^/]+/[^/]+/?$',  # https://github.com/user/repo
+        r'^https?://gitlab\.com/[^/]+/[^/]+/?$',  # https://gitlab.com/user/repo
+        r'^https?://bitbucket\.org/[^/]+/[^/]+/?$',  # https://bitbucket.org/user/repo
+        r'^git@.*:.*\.git$',  # git@github.com:user/repo.git
+        r'^ssh://git@.*/.*/.*\.git$',  # ssh://git@github.com/user/repo.git
+    ]
+    
+    for pattern in git_patterns:
+        if re.match(pattern, target, re.IGNORECASE):
+            return True
+    
+    # Check if it looks like a URL
+    try:
+        parsed = urlparse(target)
+        if parsed.scheme in ['http', 'https', 'ssh', 'git']:
+            return True
+    except:
+        pass
+    
+    return False
+
+
+def clone_git_repository(git_url: str, temp_dir: str = None) -> Tuple[str, bool]:
+    """
+    Clone a git repository to a temporary directory
+    
+    Args:
+        git_url: Git repository URL
+        temp_dir: Optional temporary directory path
+        
+    Returns:
+        Tuple of (cloned_path, is_temporary)
+    """
+    if not temp_dir:
+        temp_dir = tempfile.mkdtemp(prefix="vulnreach_clone_")
+        is_temporary = True
+    else:
+        is_temporary = False
+    
+    try:
+        print(f"📥 Cloning repository: {git_url}")
+        
+        # Clone the repository
+        cmd = ['git', 'clone', '--depth', '1', git_url, temp_dir]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+        if result.returncode != 0:
+            print(f"❌ Git clone failed: {result.stderr}")
+            if is_temporary and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            return None, False
+        
+        print(f"✅ Repository cloned to: {temp_dir}")
+        return temp_dir, is_temporary
+        
+    except subprocess.TimeoutExpired:
+        print("❌ Git clone timed out (5 minutes)")
+        if is_temporary and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        return None, False
+    except Exception as e:
+        print(f"❌ Error cloning repository: {e}")
+        if is_temporary and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        return None, False
+
+
+def extract_repo_name_from_url(git_url: str) -> str:
+    """Extract repository name from git URL"""
+    if not git_url:
+        return "unknown_repo"
+    
+    # Remove .git suffix if present
+    url = git_url.rstrip('/')
+    if url.endswith('.git'):
+        url = url[:-4]
+    
+    # Extract the last part of the path
+    if '/' in url:
+        repo_name = url.split('/')[-1]
+    else:
+        repo_name = url
+    
+    # Sanitize the name for filesystem use
+    repo_name = re.sub(r'[^\w\-_.]', '_', repo_name)
+    
+    return repo_name or "unknown_repo"
 
 def version_key(v: str) -> Tuple:
     """Simple numeric comparator for versions like 1.2.3, 5.3, 5.4.0."""
@@ -633,13 +745,20 @@ def create_security_findings_dir(project_name: str) -> str:
 
 
 def main():
+    start_time = time.time()
     parser = argparse.ArgumentParser(
         description='Security SCA Tool using Syft and Trivy',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Scan directory with SBOM generation
+  # Scan local directory with SBOM generation
   %(prog)s /path/to/project --output-report security_report.json
+
+  # Scan git repository with SBOM generation  
+  %(prog)s https://github.com/user/repo.git --output-report security_report.json
+
+  # Scan GitHub repository (auto-detects .git)
+  %(prog)s https://github.com/user/repo --output-report security_report.json
 
   # Use existing SBOM file
   %(prog)s --sbom existing_sbom.json --output-report report.json
@@ -649,10 +768,13 @@ Examples:
 
   # Direct directory scan (no SBOM generation)
   %(prog)s /path/to/project --direct-scan
+
+  # Clone and scan git repository with reachability analysis
+  %(prog)s git@github.com:user/repo.git --run-reachability
         """
     )
 
-    parser.add_argument('target', nargs='?', help='Directory to scan (if not using --sbom)')
+    parser.add_argument('target', nargs='?', help='Directory path or git repository URL to scan (if not using --sbom)')
     parser.add_argument('--sbom', help='Use existing SBOM file instead of generating new one')
     parser.add_argument('--output-sbom', help='Save generated SBOM to file')
     parser.add_argument('--output-report', help='Output path for security report (default: security_report.json)')
@@ -665,7 +787,9 @@ Examples:
                         help='Output path for consolidated fixed-version recommendations (default: consolidated.json)',
                         default='consolidated.json')
     parser.add_argument('--run-reachability', action='store_true',
-                        help='Run vulnerability reachability analysis after security scan')
+                        help='Run multi-language vulnerability reachability analysis after security scan')
+    parser.add_argument('--run-exploitability', action='store_true',
+                        help='Run exploitability analysis using SearchSploit to check for public exploits')
 
     args = parser.parse_args()
 
@@ -681,10 +805,26 @@ Examples:
 
     print("🚀 Starting Security Analysis with Syft and Trivy...")
 
+    # Variables to track temporary directories for cleanup
+    temp_clone_dir = None
+    is_temp_clone = False
+
     try:
+        # Handle git repository cloning if target is a git URL
+        actual_target = args.target
+        if args.target and is_git_url(args.target):
+            temp_clone_dir, is_temp_clone = clone_git_repository(args.target)
+            if not temp_clone_dir:
+                print("❌ Failed to clone git repository")
+                sys.exit(1)
+            actual_target = temp_clone_dir
+        
         # Determine project name and create security_findings directory structure
-        if args.target:
-            project_name = get_project_name(args.target)
+        if actual_target:
+            if is_git_url(args.target):
+                project_name = extract_repo_name_from_url(args.target)
+            else:
+                project_name = get_project_name(actual_target)
         elif args.sbom:
             # If using existing SBOM, try to extract project name from SBOM path
             sbom_dir = os.path.dirname(os.path.abspath(args.sbom))
@@ -723,10 +863,10 @@ Examples:
         components = []
         vulnerabilities = []
 
-        if args.direct_scan and args.target:
+        if args.direct_scan and actual_target:
             # Direct directory scan with Trivy (no SBOM)
             print("\n🎯 Performing direct vulnerability scan...")
-            vulnerabilities = trivy.scan_directory(args.target, args.trivy_output)
+            vulnerabilities = trivy.scan_directory(actual_target, args.trivy_output)
 
         elif args.sbom:
             # Use existing SBOM
@@ -739,8 +879,8 @@ Examples:
             sbom_path = args.output_sbom or "temp_sbom.json"
             temp_sbom = not args.output_sbom
 
-            print(f"\n📋 Generating SBOM from: {args.target}")
-            if syft.generate_sbom(args.target, sbom_path, args.sbom_format):
+            print(f"\n📋 Generating SBOM from: {actual_target}")
+            if syft.generate_sbom(actual_target, sbom_path, args.sbom_format):
                 components = syft.parse_sbom_components(sbom_path)
                 vulnerabilities = trivy.scan_sbom(sbom_path, args.trivy_output)
 
@@ -754,10 +894,13 @@ Examples:
                 print("❌ Failed to generate SBOM")
                 sys.exit(1)
 
+        # Calculate scan duration up to this point for the report
+        scan_duration = time.time() - start_time
+        
         # Generate security report
         print("\n📊 Generating security report...")
         report_path = args.output_report or "security_report.json"
-        SecurityReporter.generate_report(components, vulnerabilities, report_path)
+        SecurityReporter.generate_report(components, vulnerabilities, report_path, scan_duration)
 
         print(f"\n💾 Full report saved to: {report_path}")
 
@@ -771,35 +914,87 @@ Examples:
             json.dump(consolidated, cf, indent=2)
 
         print(f"🧩 Consolidated recommendations saved to: {args.output_consolidated}")
-        print(f"🧩 Consolidated recommendations saved to: {args.output_consolidated}")
 
         # Run reachability analysis if requested
         if args.run_reachability:
-            print("\n🔍 Running vulnerability reachability analysis...")
-            reachability_output = os.path.join(project_findings_dir, "vulnerability_reachability_report.json")
-            run_reachability_analysis(args.target or ".", args.output_consolidated, reachability_output)
-            print(f"📊 Reachability analysis saved to: {reachability_output}")
+            print("\n🔍 Running multi-language vulnerability reachability analysis...")
+            detected_language = run_multi_language_analysis(actual_target or ".", args.output_consolidated, project_findings_dir)
+            print(f"📊 Reachability analysis completed for {detected_language.upper()} project")
+            print(f"📁 Reports saved to: {project_findings_dir}")
+        
+        # Run exploitability analysis if requested
+        if args.run_exploitability and vulnerabilities:
+            print("\n💥 Running exploitability analysis using SearchSploit...")
+            exploit_analyzer = ExploitabilityAnalyzer()
+            
+            # Check if SearchSploit is available
+            prereqs = exploit_analyzer.check_prerequisites()
+            if not prereqs["searchsploit_available"]:
+                print("⚠️  SearchSploit not found. Exploitability analysis will be limited.")
+                print("   Install SearchSploit: apt update && apt install exploitdb")
+            
+            # Convert vulnerabilities to the format expected by the analyzer
+            vuln_data = []
+            for vuln in vulnerabilities:
+                vuln_dict = {
+                    'vulnerability_id': vuln.vulnerability_id,
+                    'pkg_name': vuln.pkg_name,
+                    'pkg_version': vuln.pkg_version,
+                    'severity': vuln.severity,
+                    'cvss_score': vuln.cvss_score
+                }
+                vuln_data.append(vuln_dict)
+            
+            # Perform exploitability analysis
+            exploit_analyses = exploit_analyzer.analyze_vulnerability_batch(vuln_data)
+            
+            # Generate exploitability report
+            exploit_report_path = os.path.join(project_findings_dir, "exploitability_report.json")
+            exploit_analyzer.generate_exploitability_report(exploit_analyses, exploit_report_path)
+            
+            # Print summary
+            exploit_analyzer.print_exploitability_summary(exploit_analyses)
+            
+            print(f"💥 Exploitability report saved to: {exploit_report_path}")
+        elif args.run_exploitability and not vulnerabilities:
+            print("\n💥 No vulnerabilities found - skipping exploitability analysis")
 
         # Exit with appropriate code based on findings
         critical_high_vulns = len([v for v in vulnerabilities
                                    if v.severity in ['CRITICAL', 'HIGH']])
 
+        # Calculate final scan duration
+        final_scan_duration = time.time() - start_time
+        
         if critical_high_vulns > 0:
             print(f"\n🚨 Found {critical_high_vulns} CRITICAL/HIGH vulnerabilities!")
-            sys.exit(1)
+            print(f"\n⏱️  Total scan duration: {final_scan_duration:.2f} seconds")
+            exit_code = 1
         elif vulnerabilities:
             print(f"\n⚠️  Found {len(vulnerabilities)} vulnerabilities (MEDIUM/LOW)")
-            sys.exit(0)
+            print(f"\n⏱️  Total scan duration: {final_scan_duration:.2f} seconds")
+            exit_code = 0
         else:
             print("\n✅ No vulnerabilities found!")
-            sys.exit(0)
+            print(f"\n⏱️  Total scan duration: {final_scan_duration:.2f} seconds")
+            exit_code = 0
 
     except KeyboardInterrupt:
         print("\n❌ Scan interrupted by user")
-        sys.exit(130)
+        exit_code = 130
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
-        sys.exit(1)
+        exit_code = 1
+    finally:
+        # Clean up temporary git clone directory
+        if is_temp_clone and temp_clone_dir and os.path.exists(temp_clone_dir):
+            try:
+                print(f"🧹 Cleaning up temporary clone directory: {temp_clone_dir}")
+                shutil.rmtree(temp_clone_dir, ignore_errors=True)
+            except Exception as e:
+                print(f"⚠️  Warning: Failed to clean up temporary directory: {e}")
+        
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

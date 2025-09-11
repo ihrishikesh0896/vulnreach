@@ -9,7 +9,11 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+tests/
+test_packages
+vulnreach-dashboard/
 develop-eggs/
+.claude/
 dist/
 downloads/
 eggs/
@@ -25,6 +29,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+templates/
+
+
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -205,3 +212,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+*.pdf

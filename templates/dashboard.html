@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Findings Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/dashboard.css') }}" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">Security Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Dashboard Overview -->
+        <div id="dashboard-overview" class="mb-4">
+            <div class="row" id="overview-stats">
+                <!-- Overview cards will be loaded here -->
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6>Severity Distribution</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="severityChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6>Reachability Overview</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="reachabilityChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Bar -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <input type="text" id="search-input" class="form-control" placeholder="Search vulnerabilities...">
+                    </div>
+                    <div class="col-md-3">
+                        <select id="severity-filter" class="form-select">
+                            <option value="">All Severities</option>
+                            <option value="CRITICAL">Critical</option>
+                            <option value="HIGH">High</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="LOW">Low</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="reachability-filter" class="form-select">
+                            <option value="">All Vulnerabilities</option>
+                            <option value="reachable">Reachable Only</option>
+                            <option value="unreachable">Unreachable Only</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="dashboard.clearFilters()">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Projects</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="project-list" class="list-group list-group-flush">
+                            <!-- Projects will be loaded here dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-9">
+                <div id="project-details" class="d-none">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4 id="project-title">Project Details</h4>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary" onclick="dashboard.showSecurityReport()">Security Report</button>
+                                <button class="btn btn-sm btn-outline-success" onclick="dashboard.showReachabilityReport()">Reachability</button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="dashboard.showExploitabilityReport()">Exploitability</button>
+                                <button class="btn btn-sm btn-outline-info" onclick="dashboard.showSBOMReport()">SBOM</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="dashboard.showConsolidatedReport()">Raw JSON</button>
+                                <button class="btn btn-sm btn-success" onclick="dashboard.showExportModal()">Export</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="report-content">
+                                <!-- Report content will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Items Panel -->
+                    <div class="card mt-3" id="action-items-panel" style="display: none;">
+                        <div class="card-header">
+                            <h5>🎯 Prioritized Action Items</h5>
+                        </div>
+                        <div class="card-body" id="action-items-content">
+                            <!-- Action items will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="welcome-message" class="text-center mt-5">
+                    <h3 class="text-muted">Select a project to view security findings</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vulnerability Details Modal -->
+    <div class="modal fade" id="vulnerabilityModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Vulnerability Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modalContent">
+                    <!-- Modal content will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="dashboard.exportVulnerability()">Export</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div class="modal fade" id="exportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Export Report</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Export Format:</label>
+                        <select id="export-format" class="form-select">
+                            <option value="json">JSON</option>
+                            <option value="csv">CSV</option>
+                            <option value="pdf">PDF Report</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Include:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="include-reachable" checked>
+                            <label class="form-check-label">Reachable Vulnerabilities</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="include-unreachable">
+                            <label class="form-check-label">Unreachable Vulnerabilities</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="dashboard.performExport()">Export</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
