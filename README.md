@@ -52,6 +52,12 @@ Traditional vulnerability scanners overwhelm you with alerts, but VulnReach answ
 - **Risk Amplification**: Identifies vulnerabilities with known exploits in the wild
 - **Prioritization Support**: Helps focus on vulnerabilities with active exploitation
 
+### 🤖 **AI-Powered Analysis** *(LATEST)*
+- **Intelligent Recommendations**: AI-powered vulnerability analysis and remediation guidance
+- **Smart Prioritization**: Machine learning-based risk assessment and fix suggestions
+- **Auto Configuration**: Automatic setup with `--init-config` for first-time users
+- **Multi-Provider Support**: OpenAI, Anthropic, Google, Cohere, and more AI providers
+
 ### 📊 **Risk Prioritization**
 - **CRITICAL**: Actively used across multiple files with direct function calls
 - **HIGH**: Used with direct function calls
@@ -164,6 +170,24 @@ vulnreach https://github.com/user/repo.git --run-reachability --run-exploitabili
 
 # Complete analysis with all features
 vulnreach /path/to/project --run-reachability --run-exploitability --output-report full_report.json
+```
+
+### With AI-Powered Analysis *(LATEST)*
+```bash
+# First time setup - creates config file
+vulnreach /path/to/your/project --llm-fix
+
+# Setup AI configuration manually
+vulnreach --init-config
+
+# AI-powered vulnerability analysis (after config setup)
+vulnreach /path/to/your/project --llm-fix
+
+# Remote repository with AI analysis
+vulnreach https://github.com/user/repo.git --llm-fix
+
+# Note: Edit ~/.vulnreach/config/creds.yaml to add your AI provider API keys
+# Supports: OpenAI, Anthropic, Google, Cohere, Groq, and more
 ```
 
 ### Advanced Usage
@@ -405,6 +429,8 @@ target                          # Directory path OR git repository URL
 --direct-scan                   # Skip SBOM, scan directly with Trivy
 --run-reachability             # Enable multi-language reachability analysis
 --run-exploitability           # Enable exploitability analysis (NEW)
+--llm-fix                      # Use AI-powered analysis workflow (LATEST)
+--init-config                  # Create default AI configuration file
 
 # Output control
 --output-report REPORT_FILE     # Security report path (includes scan timing)
@@ -519,6 +545,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Version 2.0 Features *(NEW)*
 - 🌐 **Git Repository Support**: Scan remote repositories directly from URLs
 - 💥 **Exploitability Analysis**: Check for public exploits using SearchSploit
+- 🤖 **AI-Powered Analysis**: Intelligent vulnerability analysis with multiple AI providers
 - ⏱️ **Performance Tracking**: Detailed scan duration metrics and timing
 - 📁 **Smart Organization**: Auto-organized reports by project/repository name
 - 🧹 **Automatic Cleanup**: Temporary git clones are cleaned up automatically

@@ -21,6 +21,8 @@ from vulnreach.utils import (
 )
 from vulnreach.utils.multi_language_analyzer import run_multi_language_analysis
 from vulnreach.utils.exploitability_analyzer import ExploitabilityAnalyzer
+from vulnreach.utils.ai_analyzer import AIVulnerabilityAnalyzer, print_ai_analysis_summary
+from vulnreach.config import get_config_loader
 import os
 import json
 import sys
@@ -744,6 +746,132 @@ def create_security_findings_dir(project_name: str) -> str:
     return project_dir
 
 
+def create_default_config():
+    """Create default configuration file"""
+    try:
+        config_loader = get_config_loader()
+        config_loader.create_default_config()
+        print("✅ Default configuration file created successfully!")
+        print(f"📁 Location: {config_loader.config_path}")
+        print("💡 Edit this file to add your API keys and configure providers.")
+        print("   Use environment variables for sensitive values: ${VAR_NAME}")
+    except Exception as e:
+        print(f"❌ Failed to create config file: {e}")
+        sys.exit(1)
+
+
+def run_ai_workflow(vulnerabilities: List[Vulnerability], components: List[Component], project_findings_dir: str):
+    """
+    Run AI-powered vulnerability analysis and recommendations workflow
+    
+    Args:
+        vulnerabilities: List of discovered vulnerabilities
+        components: List of discovered components
+        project_findings_dir: Directory to save AI analysis results
+    """
+    print("\n🤖 Starting AI-powered vulnerability analysis...")
+    
+    try:
+        # Initialize AI analyzer
+        ai_analyzer = AIVulnerabilityAnalyzer()
+        print(f"🔧 Using AI analyzer with {len(ai_analyzer.config.providers)} configured providers")
+        
+        # Load existing analysis results
+        vulnerability_data = []
+        for vuln in vulnerabilities:
+            vuln_dict = {
+                'id': vuln.vulnerability_id,
+                'package_name': vuln.pkg_name,
+                'package_version': vuln.pkg_version,
+                'severity': vuln.severity,
+                'title': vuln.title,
+                'description': vuln.description,
+                'fixed_version': vuln.fixed_version,
+                'cvss_score': vuln.cvss_score,
+                'cvss_vector': vuln.cvss_vector,
+                'cwe_ids': vuln.cwe_ids or [],
+                'references': vuln.references or [],
+                'primary_url': vuln.primary_url
+            }
+            vulnerability_data.append(vuln_dict)
+        
+        # Load reachability analysis if available
+        reachability_data = {}
+        reachability_report_paths = [
+            os.path.join(project_findings_dir, "vulnerability_reachability_report.json"),
+            os.path.join(project_findings_dir, "python_vulnerability_reachability_report.json"),
+            os.path.join(project_findings_dir, "java_vulnerability_reachability_report.json")
+        ]
+        
+        for reachability_path in reachability_report_paths:
+            if os.path.exists(reachability_path):
+                try:
+                    with open(reachability_path, 'r') as f:
+                        reachability_data = json.load(f)
+                    print(f"📊 Loaded reachability analysis from: {reachability_path}")
+                    break
+                except Exception as e:
+                    print(f"⚠️  Warning: Could not load reachability data from {reachability_path}: {e}")
+        
+        # Load exploitability analysis if available
+        exploitability_data = {}
+        exploitability_path = os.path.join(project_findings_dir, "exploitability_report.json")
+        if os.path.exists(exploitability_path):
+            try:
+                with open(exploitability_path, 'r') as f:
+                    exploitability_data = json.load(f)
+                print(f"💥 Loaded exploitability analysis from: {exploitability_path}")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not load exploitability data: {e}")
+        
+        # Perform AI analysis
+        print("🧠 Performing AI-powered integrated analysis...")
+        ai_analyses, ai_summary = ai_analyzer.analyze_integrated_results(
+            vulnerability_data, reachability_data, exploitability_data
+        )
+        
+        # Generate comprehensive AI report
+        ai_report_path = os.path.join(project_findings_dir, "ai_analysis_report.json")
+        ai_analyzer.generate_ai_report(ai_analyses, ai_summary, ai_report_path)
+        
+        # Print AI analysis summary
+        print_ai_analysis_summary(ai_summary)
+        
+        print(f"\n🤖 AI analysis completed successfully!")
+        print(f"📄 Comprehensive AI report saved to: {ai_report_path}")
+        print(f"🎯 Priority actions identified: {ai_summary.critical_recommendations + ai_summary.high_priority_actions}")
+        
+    except Exception as e:
+        print(f"❌ Error in AI workflow: {e}")
+        print("💡 Falling back to traditional analysis workflow")
+        
+        # Fallback: create a basic analysis report
+        try:
+            fallback_analysis = {
+                "analysis_type": "AI-powered vulnerability analysis (fallback mode)",
+                "timestamp": datetime.now().isoformat(),
+                "total_vulnerabilities": len(vulnerabilities),
+                "total_components": len(components),
+                "status": "fallback_implementation",
+                "error": str(e),
+                "basic_recommendations": [
+                    {
+                        "priority": "HIGH",
+                        "recommendation": f"Review and remediate {len([v for v in vulnerabilities if v.severity in ['CRITICAL', 'HIGH']])} critical/high severity vulnerabilities",
+                        "reasoning": "AI analysis failed, falling back to basic severity-based recommendations"
+                    }
+                ]
+            }
+            
+            fallback_report_path = os.path.join(project_findings_dir, "ai_analysis_fallback.json")
+            with open(fallback_report_path, 'w') as f:
+                json.dump(fallback_analysis, f, indent=2)
+            
+            print(f"📄 Fallback analysis saved to: {fallback_report_path}")
+        except Exception as fallback_error:
+            print(f"❌ Fallback analysis also failed: {fallback_error}")
+
+
 def main():
     start_time = time.time()
     parser = argparse.ArgumentParser(
@@ -790,8 +918,41 @@ Examples:
                         help='Run multi-language vulnerability reachability analysis after security scan')
     parser.add_argument('--run-exploitability', action='store_true',
                         help='Run exploitability analysis using SearchSploit to check for public exploits')
+    parser.add_argument('--init-config', action='store_true',
+                        help='Create default configuration file at ~/.vulnreach/config/creds.yaml')
+    parser.add_argument('--llm-fix', action='store_true',
+                        help='Use AI-powered workflow for vulnerability analysis and recommendations')
 
     args = parser.parse_args()
+
+    # Handle config initialization
+    if args.init_config:
+        create_default_config()
+        return
+
+    # Handle LLM fix workflow - check credentials early
+    ai_workflow_enabled = False
+    if args.llm_fix:
+        from vulnreach.config import get_config_loader
+        
+        config_path = os.path.expanduser("~/.vulnreach/config/creds.yaml")
+        if not os.path.exists(config_path):
+            print("❌ AI workflow requires configuration file but creds.yaml not found")
+            print("   Running traditional workflow instead")
+        else:
+            try:
+                config_loader = get_config_loader()
+                has_keys, valid_providers = config_loader.has_valid_api_keys()
+                
+                if has_keys:
+                    ai_workflow_enabled = True
+                    print(f"🤖 Using AI workflow with providers: {', '.join(valid_providers)}")
+                else:
+                    print("❌ AI workflow skipped - no valid API keys found in configuration")
+                    print("   Running traditional workflow instead")
+            except Exception as e:
+                print("❌ AI workflow skipped - error loading configuration")
+                print("   Running traditional workflow instead")
 
     # Validate arguments
     if not args.sbom and not args.target:
@@ -915,15 +1076,17 @@ Examples:
 
         print(f"🧩 Consolidated recommendations saved to: {args.output_consolidated}")
 
-        # Run reachability analysis if requested
-        if args.run_reachability:
+        # Run reachability analysis if requested (both traditional and AI workflows)
+        reachability_completed = False
+        if args.run_reachability or args.llm_fix:
             print("\n🔍 Running multi-language vulnerability reachability analysis...")
             detected_language = run_multi_language_analysis(actual_target or ".", args.output_consolidated, project_findings_dir)
             print(f"📊 Reachability analysis completed for {detected_language.upper()} project")
-            print(f"📁 Reports saved to: {project_findings_dir}")
+            reachability_completed = True
         
-        # Run exploitability analysis if requested
-        if args.run_exploitability and vulnerabilities:
+        # Run exploitability analysis if requested (both traditional and AI workflows)
+        exploitability_completed = False
+        if (args.run_exploitability or args.llm_fix) and vulnerabilities:
             print("\n💥 Running exploitability analysis using SearchSploit...")
             exploit_analyzer = ExploitabilityAnalyzer()
             
@@ -933,9 +1096,54 @@ Examples:
                 print("⚠️  SearchSploit not found. Exploitability analysis will be limited.")
                 print("   Install SearchSploit: apt update && apt install exploitdb")
             
-            # Convert vulnerabilities to the format expected by the analyzer
+            # Filter vulnerabilities based on reachability analysis if available
+            filtered_vulnerabilities = vulnerabilities
+            if reachability_completed:
+                # Load reachability analysis results to filter to analyzed packages only
+                reachable_packages = {}  # package_name -> version mapping
+                reachability_report_paths = [
+                    os.path.join(project_findings_dir, "vulnerability_reachability_report.json"),
+                    os.path.join(project_findings_dir, "python_vulnerability_reachability_report.json"),
+                    os.path.join(project_findings_dir, "java_vulnerability_reachability_report.json")
+                ]
+                
+                for reachability_path in reachability_report_paths:
+                    if os.path.exists(reachability_path):
+                        try:
+                            with open(reachability_path, 'r') as f:
+                                reachability_data = json.load(f)
+                            
+                            # Extract packages and versions that were analyzed in reachability analysis
+                            for vuln in reachability_data.get("vulnerabilities", []):
+                                package_name = vuln.get("package_name", "").lower()
+                                installed_version = vuln.get("installed_version", "")
+                                if package_name and installed_version:
+                                    reachable_packages[package_name] = installed_version
+                            
+                            print(f"📊 Found reachability analysis with {len(reachability_data.get('vulnerabilities', []))} packages")
+                            break
+                        except Exception as e:
+                            print(f"⚠️  Warning: Could not load reachability data from {reachability_path}: {e}")
+                
+                if reachable_packages:
+                    # Filter vulnerabilities to only include exact package+version combinations from reachability analysis
+                    original_count = len(vulnerabilities)
+                    filtered_vulnerabilities = []
+                    
+                    for vuln in vulnerabilities:
+                        package_key = vuln.pkg_name.lower()
+                        if (package_key in reachable_packages and 
+                            vuln.pkg_version == reachable_packages[package_key]):
+                            filtered_vulnerabilities.append(vuln)
+                    
+                    filtered_count = len(filtered_vulnerabilities)
+                    print(f"🔍 Filtering exploit analysis: {original_count} total vulnerabilities → {filtered_count} vulnerabilities from {len(reachable_packages)} reachability-analyzed packages")
+                else:
+                    print("⚠️  No reachability analysis packages found, analyzing all vulnerabilities")
+            
+            # Convert filtered vulnerabilities to the format expected by the analyzer
             vuln_data = []
-            for vuln in vulnerabilities:
+            for vuln in filtered_vulnerabilities:
                 vuln_dict = {
                     'vulnerability_id': vuln.vulnerability_id,
                     'pkg_name': vuln.pkg_name,
@@ -945,19 +1153,32 @@ Examples:
                 }
                 vuln_data.append(vuln_dict)
             
-            # Perform exploitability analysis
-            exploit_analyses = exploit_analyzer.analyze_vulnerability_batch(vuln_data)
-            
-            # Generate exploitability report
-            exploit_report_path = os.path.join(project_findings_dir, "exploitability_report.json")
-            exploit_analyzer.generate_exploitability_report(exploit_analyses, exploit_report_path)
-            
-            # Print summary
-            exploit_analyzer.print_exploitability_summary(exploit_analyses)
-            
-            print(f"💥 Exploitability report saved to: {exploit_report_path}")
-        elif args.run_exploitability and not vulnerabilities:
+            if vuln_data:
+                # Perform exploitability analysis
+                exploit_analyses = exploit_analyzer.analyze_vulnerability_batch(vuln_data)
+                
+                # Generate exploitability report
+                exploit_report_path = os.path.join(project_findings_dir, "exploitability_report.json")
+                exploit_analyzer.generate_exploitability_report(exploit_analyses, exploit_report_path)
+                
+                # Print summary
+                exploit_analyzer.print_exploitability_summary(exploit_analyses)
+                
+                print(f"💥 Exploitability report saved to: {exploit_report_path}")
+                exploitability_completed = True
+            else:
+                print("💥 No reachable vulnerabilities found for exploit analysis")
+                exploitability_completed = False
+        elif (args.run_exploitability or args.llm_fix) and not vulnerabilities:
             print("\n💥 No vulnerabilities found - skipping exploitability analysis")
+
+        # Run AI-powered analysis if enabled and credentials are available
+        if ai_workflow_enabled:
+            run_ai_workflow(vulnerabilities, components, project_findings_dir)
+            
+        # Print completion summary for individual analysis types
+        if reachability_completed and exploitability_completed:
+            print(f"\n📁 All analysis reports saved to: {project_findings_dir}")
 
         # Exit with appropriate code based on findings
         critical_high_vulns = len([v for v in vulnerabilities

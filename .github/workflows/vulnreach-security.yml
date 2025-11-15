@@ -1,0 +1,466 @@
+name: VulnReach Security Pipeline
+on:
+  push:
+    branches: [ main, master, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Run weekly security scans
+    - cron: '0 2 * * 1'
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
+jobs:
+  # Step 1: Generate SBOMs
+  generate-sboms:
+    name: Generate Software Bill of Materials
+    runs-on: ubuntu-latest
+    outputs:
+      sbom-hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Node
+        if: hashFiles('**/package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Syft (SBOM generator)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate Python SBOM (CycloneDX)
+        if: hashFiles('**/requirements.txt', '**/pyproject.toml', '**/setup.py') != ''
+        run: |
+          syft packages dir:. -o cyclonedx-json=sbom-python.json
+
+      - name: Generate Node SBOM (CycloneDX)
+        if: hashFiles('**/package.json') != ''
+        run: |
+          npm install -g @cyclonedx/cyclonedx-npm
+          cyclonedx-npm --output-file sbom-node.json
+
+      - name: Generate SPDX SBOM (for compliance)
+        run: |
+          syft packages dir:. -o spdx-json=sbom-spdx.json
+
+      - name: Calculate SBOM hash
+        id: hash
+        run: |
+          HASH=$(sha256sum sbom-*.json | sha256sum | cut -d' ' -f1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sboms
+          path: |
+            sbom-*.json
+          retention-days: 90
+
+  # Step 2: Run VulnReach analysis
+  vulnreach-analysis:
+    name: VulnReach Security Analysis
+    runs-on: ubuntu-latest
+    needs: generate-sboms
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Trivy
+        run: |
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Install VulnReach
+        run: |
+          pip install -e .
+
+      - name: Run VulnReach scan
+        run: |
+          vulnreach scan --target . --output security_findings
+
+      - name: Upload VulnReach findings
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnreach-findings
+          path: |
+            security_findings/**/*.json
+          retention-days: 90
+
+      - name: Check for critical vulnerabilities
+        run: |
+          if [ -f "security_findings/*/exploitability_report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical_exploitable // 0' security_findings/*/exploitability_report.json | head -1)
+            echo "Critical exploitable vulnerabilities: $CRITICAL"
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "::warning::Found $CRITICAL critical exploitable vulnerabilities"
+            fi
+          fi
+
+  # Step 3: Additional security scans
+  security-scans:
+    name: Additional Security Scans
+    runs-on: ubuntu-latest
+    needs: generate-sboms
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'json'
+          output: 'trivy-fs.json'
+
+      - name: Run Trivy config scan (IaC)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'json'
+          output: 'trivy-config.json'
+
+      - name: Run Snyk scan
+        if: env.SNYK_TOKEN != ''
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --json-file-output=snyk-report.json
+
+      - name: Upload additional scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: additional-scans
+          path: |
+            trivy-*.json
+            snyk-report.json
+          retention-days: 90
+
+  # Step 4: CodeQL analysis
+  codeql-analysis:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: 'python,javascript'
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+  # Step 5: Generate provenance and sign
+  provenance:
+    name: Generate Provenance & Sign
+    runs-on: ubuntu-latest
+    needs: [vulnreach-analysis, security-scans]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Install in-toto
+        run: |
+          pip install in-toto
+
+      - name: Generate in-toto provenance
+        run: |
+          in-toto-run --step-name vulnreach-scan \
+            --materials . \
+            --products vulnreach-findings/ \
+            --key ${{ secrets.IN_TOTO_KEY }} \
+            -- echo "VulnReach scan completed"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign artifacts with Cosign (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          # Sign SBOM and findings with keyless signing
+          for file in sboms/*.json vulnreach-findings/**/*.json; do
+            if [ -f "$file" ]; then
+              cosign sign-blob --yes "$file" --bundle "${file}.sig"
+            fi
+          done
+
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.9.0
+        with:
+          base64-subjects: |
+            ${{ needs.vulnreach-analysis.outputs.sbom-hash }}
+
+      - name: Upload provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance
+          path: |
+            *.link
+            *.sig
+            provenance.json
+          retention-days: 90
+
+  # Step 6: Compose risk story and ingest to Neo4j
+  compose-risk-story:
+    name: Compose Unified Risk Story
+    runs-on: ubuntu-latest
+    needs: [vulnreach-analysis, security-scans, provenance]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install neo4j
+
+      - name: Download VulnReach findings
+        uses: actions/download-artifact@v4
+        with:
+          name: vulnreach-findings
+          path: security_findings
+
+      - name: Compose risk story
+        env:
+          NEO4J_URI: ${{ secrets.NEO4J_URI }}
+          NEO4J_USER: ${{ secrets.NEO4J_USER }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+        run: |
+          RELEASE_ID="${{ github.repository }}@${{ github.sha }}"
+          
+          # Find the findings directory
+          FINDINGS_DIR=$(find security_findings -type d -name "*" | head -1)
+          
+          if [ -n "$FINDINGS_DIR" ]; then
+            python scripts/compose_risk_story.py \
+              --findings-dir "$FINDINGS_DIR" \
+              --release-id "$RELEASE_ID"
+          else
+            echo "No findings directory found"
+          fi
+
+      - name: Upload risk story report
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-story
+          path: |
+            security_findings/**/triage_report.json
+          retention-days: 90
+
+  # Step 7: Upload to S3 (optional)
+  upload-artifacts:
+    name: Upload Artifacts to S3
+    runs-on: ubuntu-latest
+    needs: [compose-risk-story]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Upload to S3
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          S3_PATH="s3://${{ secrets.S3_BUCKET }}/security/${{ github.repository }}/${{ github.sha }}/${TIMESTAMP}/"
+          
+          aws s3 sync . "$S3_PATH" \
+            --exclude "*" \
+            --include "*.json" \
+            --include "*.sig" \
+            --include "*.link"
+          
+          echo "Artifacts uploaded to: $S3_PATH"
+
+  # Step 8: Create GitHub issue for high-priority findings
+  create-security-issues:
+    name: Create Security Issues
+    runs-on: ubuntu-latest
+    needs: [compose-risk-story]
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    permissions:
+      issues: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download risk story
+        uses: actions/download-artifact@v4
+        with:
+          name: risk-story
+          path: risk-story
+
+      - name: Create issues for P0/P1 vulnerabilities
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Find triage report
+            const findFiles = (dir, pattern) => {
+              const files = fs.readdirSync(dir, { withFileTypes: true });
+              for (const file of files) {
+                const fullPath = path.join(dir, file.name);
+                if (file.isDirectory()) {
+                  findFiles(fullPath, pattern);
+                } else if (file.name.includes(pattern)) {
+                  return fullPath;
+                }
+              }
+            };
+            
+            const reportPath = findFiles('risk-story', 'triage_report.json');
+            if (!reportPath) {
+              console.log('No triage report found');
+              return;
+            }
+            
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            
+            // Create issues for P0 and P1 vulnerabilities
+            const highPriority = report.high_priority_vulnerabilities
+              .filter(v => v.priority.startsWith('P0') || v.priority.startsWith('P1'));
+            
+            for (const vuln of highPriority.slice(0, 5)) { // Limit to 5 issues
+              const title = `[Security] ${vuln.priority}: ${vuln.package}@${vuln.version} - ${vuln.vulnerability_id}`;
+              const body = `
+            ## Security Vulnerability Detected
+            
+            **Priority:** ${vuln.priority}
+            **Risk Score:** ${vuln.risk_score}/10
+            **Package:** ${vuln.package}@${vuln.version}
+            **Vulnerability:** ${vuln.vulnerability_id}
+            **Severity:** ${vuln.severity}
+            
+            ### Analysis
+            - **Reachable in code:** ${vuln.is_reachable ? '✅ Yes' : '❌ No'}
+            - **Public exploits available:** ${vuln.has_exploits ? '⚠️ Yes' : '✅ No'}
+            - **Fix available:** ${vuln.recommended_fix ? '✅ Yes' : '❌ No'}
+            
+            ### Recommendation
+            ${vuln.recommendation}
+            
+            ${vuln.recommended_fix ? `### Fix\nUpgrade to version: \`${vuln.recommended_fix}\`` : ''}
+            
+            ---
+            *Generated by VulnReach Security Pipeline*
+            *Commit: ${{ github.sha }}*
+            *Date: ${new Date().toISOString()}*
+              `.trim();
+              
+              // Check if issue already exists
+              const existingIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'security,vulnreach'
+              });
+              
+              const exists = existingIssues.data.some(issue => 
+                issue.title.includes(vuln.vulnerability_id)
+              );
+              
+              if (!exists) {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: title,
+                  body: body,
+                  labels: ['security', 'vulnreach', vuln.priority.toLowerCase()]
+                });
+                console.log(`Created issue for ${vuln.vulnerability_id}`);
+              } else {
+                console.log(`Issue already exists for ${vuln.vulnerability_id}`);
+              }
+            }
+
+  # Step 9: Send notifications
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [compose-risk-story]
+    if: always()
+    steps:
+      - name: Download risk story
+        uses: actions/download-artifact@v4
+        with:
+          name: risk-story
+          path: risk-story
+        continue-on-error: true
+
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "text": "VulnReach Security Scan Complete",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*VulnReach Security Scan*\n*Repository:* ${{ github.repository }}\n*Commit:* ${{ github.sha }}\n*Status:* ${{ job.status }}"
+                  }
+                }
+              ]
+            }
+
