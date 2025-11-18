@@ -1,0 +1,1320 @@
+[
+  {
+    "package_name": "@babel/helpers",
+    "installed_version": "7.7.0",
+    "recommended_fixed_version": "7.26.10, 8.0.0-alpha.17",
+    "all_seen_fixed_versions": [
+      "7.26.10, 8.0.0-alpha.17"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "@babel/runtime",
+    "installed_version": "7.26.7",
+    "recommended_fixed_version": "7.26.10, 8.0.0-alpha.17",
+    "all_seen_fixed_versions": [
+      "7.26.10, 8.0.0-alpha.17"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "@babel/traverse",
+    "installed_version": "7.8.3",
+    "recommended_fixed_version": "7.23.2, 8.0.0-alpha.4",
+    "all_seen_fixed_versions": [
+      "7.23.2, 8.0.0-alpha.4"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "@eslint/plugin-kit",
+    "installed_version": "0.3.5",
+    "recommended_fixed_version": "0.3.4",
+    "all_seen_fixed_versions": [
+      "0.3.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "@octokit/plugin-paginate-rest",
+    "installed_version": "2.21.3",
+    "recommended_fixed_version": "11.4.1, 9.2.2",
+    "all_seen_fixed_versions": [
+      "11.4.1, 9.2.2"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "@octokit/request",
+    "installed_version": "5.6.3",
+    "recommended_fixed_version": "9.2.1, 8.4.1",
+    "all_seen_fixed_versions": [
+      "9.2.1, 8.4.1"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "@octokit/request-error",
+    "installed_version": "2.1.0",
+    "recommended_fixed_version": "5.1.1, 6.1.7",
+    "all_seen_fixed_versions": [
+      "5.1.1, 6.1.7"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "ajv",
+    "installed_version": "8.17.1",
+    "recommended_fixed_version": "6.12.3",
+    "all_seen_fixed_versions": [
+      "6.12.3"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "ansi-html",
+    "installed_version": "0.0.9",
+    "recommended_fixed_version": "0.0.8",
+    "all_seen_fixed_versions": [
+      "0.0.8"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "ansi-regex",
+    "installed_version": "6.1.0",
+    "recommended_fixed_version": "6.0.1, 5.0.1, 4.1.1, 3.0.1",
+    "all_seen_fixed_versions": [
+      "6.0.1, 5.0.1, 4.1.1, 3.0.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "async",
+    "installed_version": "3.2.6",
+    "recommended_fixed_version": "3.2.2, 2.6.4",
+    "all_seen_fixed_versions": [
+      "3.2.2, 2.6.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "axios",
+    "installed_version": "1.7.7",
+    "recommended_fixed_version": "1.12.0, 0.30.2",
+    "all_seen_fixed_versions": [
+      "1.8.2, 0.30.0",
+      "1.12.0, 0.30.2"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "babel-traverse",
+    "installed_version": "6.26.0",
+    "recommended_fixed_version": "7.23.2",
+    "all_seen_fixed_versions": [
+      "7.23.2"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "base-x",
+    "installed_version": "3.0.10",
+    "recommended_fixed_version": "5.0.1, 4.0.1, 3.0.11",
+    "all_seen_fixed_versions": [
+      "5.0.1, 4.0.1, 3.0.11"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "bl",
+    "installed_version": "5.1.0",
+    "recommended_fixed_version": "1.2.3, 2.2.1, 3.0.1, 4.0.3",
+    "all_seen_fixed_versions": [
+      "1.2.3, 2.2.1, 3.0.1, 4.0.3"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "body-parser",
+    "installed_version": "2.2.0",
+    "recommended_fixed_version": "1.20.3",
+    "all_seen_fixed_versions": [
+      "1.20.3"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "brace-expansion",
+    "installed_version": "2.0.1",
+    "recommended_fixed_version": "2.0.2, 1.1.12, 3.0.1, 4.0.1",
+    "all_seen_fixed_versions": [
+      ">=1.1.7",
+      "1.1.7",
+      "2.0.2, 1.1.12, 3.0.1, 4.0.1"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "braces",
+    "installed_version": "3.0.3",
+    "recommended_fixed_version": "3.0.3",
+    "all_seen_fixed_versions": [
+      "2.3.1",
+      "3.0.3"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "browserslist",
+    "installed_version": "4.8.5",
+    "recommended_fixed_version": "4.16.5",
+    "all_seen_fixed_versions": [
+      "4.16.5"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "cached-path-relative",
+    "installed_version": "1.0.1",
+    "recommended_fixed_version": "1.1.0",
+    "all_seen_fixed_versions": [
+      ">=1.0.2",
+      "1.1.0"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "chrome-launcher",
+    "installed_version": "0.15.1",
+    "recommended_fixed_version": "0.13.2",
+    "all_seen_fixed_versions": [
+      "0.13.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "cipher-base",
+    "installed_version": "1.0.6",
+    "recommended_fixed_version": "1.0.5",
+    "all_seen_fixed_versions": [
+      "1.0.5"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "clean-css",
+    "installed_version": "5.3.3",
+    "recommended_fixed_version": "4.1.11",
+    "all_seen_fixed_versions": [
+      "4.1.11"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "color-string",
+    "installed_version": "1.9.1",
+    "recommended_fixed_version": "1.5.5",
+    "all_seen_fixed_versions": [
+      "1.5.5"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "cookie",
+    "installed_version": "0.7.2",
+    "recommended_fixed_version": "0.7.0",
+    "all_seen_fixed_versions": [
+      "0.7.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "cross-spawn",
+    "installed_version": "7.0.6",
+    "recommended_fixed_version": "7.0.5, 6.0.6",
+    "all_seen_fixed_versions": [
+      "7.0.5, 6.0.6"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "cryptiles",
+    "installed_version": "3.1.2",
+    "recommended_fixed_version": ">=4.1.2",
+    "all_seen_fixed_versions": [
+      ">=4.1.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "d3-color",
+    "installed_version": "1.4.1",
+    "recommended_fixed_version": "3.1.0",
+    "all_seen_fixed_versions": [
+      "3.1.0"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "debug",
+    "installed_version": "4.4.3",
+    "recommended_fixed_version": "3.1.0, 2.6.9",
+    "all_seen_fixed_versions": [
+      "2.6.9, 3.1.0, 3.2.7, 4.3.1",
+      "3.1.0, 2.6.9"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "decode-uri-component",
+    "installed_version": "0.2.2",
+    "recommended_fixed_version": "0.2.1",
+    "all_seen_fixed_versions": [
+      "0.2.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "deep-extend",
+    "installed_version": "0.6.0",
+    "recommended_fixed_version": ">=0.5.1",
+    "all_seen_fixed_versions": [
+      "0.5.1",
+      ">=0.5.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "diff",
+    "installed_version": "5.2.0",
+    "recommended_fixed_version": "3.5.0",
+    "all_seen_fixed_versions": [
+      "3.5.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "dns-packet",
+    "installed_version": "5.6.1",
+    "recommended_fixed_version": "5.2.2, 1.3.2",
+    "all_seen_fixed_versions": [
+      "5.2.2, 1.3.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "dot-prop",
+    "installed_version": "6.0.1",
+    "recommended_fixed_version": "4.2.1, 5.1.1",
+    "all_seen_fixed_versions": [
+      "4.2.1, 5.1.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "ecstatic",
+    "installed_version": "2.2.2",
+    "recommended_fixed_version": "4.1.3",
+    "all_seen_fixed_versions": [
+      "4.1.3"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "electron",
+    "installed_version": "23.1.2",
+    "recommended_fixed_version": "35.7.5, 36.8.1, 37.3.1, 38.0.0-beta.6",
+    "all_seen_fixed_versions": [
+      "22.3.6, 23.2.3, 24.0.1, 25.0.0-alpha.2",
+      "22.3.19, 23.3.13, 24.7.1, 25.5.0, 26.0.0-beta.13",
+      "22.3.24, 24.8.3, 25.8.1, 26.2.1, 27.0.0-alpha.7",
+      "28.3.2, 29.3.3, 30.0.3",
+      "35.7.5, 36.8.1, 37.3.1, 38.0.0-beta.6"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "elliptic",
+    "installed_version": "6.6.1",
+    "recommended_fixed_version": "6.6.1",
+    "all_seen_fixed_versions": [
+      "6.5.3",
+      "6.5.4",
+      "6.5.6",
+      "6.5.7",
+      "6.6.0",
+      "6.6.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "es5-ext",
+    "installed_version": "0.8.2",
+    "recommended_fixed_version": "0.10.63",
+    "all_seen_fixed_versions": [
+      "0.10.63"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "eventsource",
+    "installed_version": "3.0.6",
+    "recommended_fixed_version": "1.1.1, 2.0.2",
+    "all_seen_fixed_versions": [
+      "1.1.1, 2.0.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "express",
+    "installed_version": "5.1.0",
+    "recommended_fixed_version": "4.20.0, 5.0.0",
+    "all_seen_fixed_versions": [
+      "4.19.2, 5.0.0-beta.3",
+      "4.20.0, 5.0.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "extend",
+    "installed_version": "3.0.2",
+    "recommended_fixed_version": "3.0.2, 2.0.2",
+    "all_seen_fixed_versions": [
+      "3.0.2, 2.0.2"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "fast-xml-parser",
+    "installed_version": "3.19.0",
+    "recommended_fixed_version": "4.1.2",
+    "all_seen_fixed_versions": [
+      "4.1.2"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "file-type",
+    "installed_version": "8.1.0",
+    "recommended_fixed_version": "16.5.4, 17.1.3",
+    "all_seen_fixed_versions": [
+      "16.5.4, 17.1.3"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "form-data",
+    "installed_version": "4.0.0",
+    "recommended_fixed_version": "2.5.4, 3.0.4, 4.0.4",
+    "all_seen_fixed_versions": [
+      "2.5.4, 3.0.4, 4.0.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "forwarded",
+    "installed_version": "0.2.0",
+    "recommended_fixed_version": "0.1.2",
+    "all_seen_fixed_versions": [
+      "0.1.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "fresh",
+    "installed_version": "2.0.0",
+    "recommended_fixed_version": "0.5.2",
+    "all_seen_fixed_versions": [
+      "0.5.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "fsevents",
+    "installed_version": "2.3.3",
+    "recommended_fixed_version": "1.2.11",
+    "all_seen_fixed_versions": [
+      "1.2.11"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "fstream",
+    "installed_version": "1.0.12",
+    "recommended_fixed_version": "1.0.12",
+    "all_seen_fixed_versions": [
+      "1.0.12"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "glob-parent",
+    "installed_version": "6.0.2",
+    "recommended_fixed_version": "5.1.2",
+    "all_seen_fixed_versions": [
+      "5.1.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "got",
+    "installed_version": "9.6.0",
+    "recommended_fixed_version": "12.1.0, 11.8.5",
+    "all_seen_fixed_versions": [
+      "12.1.0, 11.8.5"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "growl",
+    "installed_version": "1.8.1",
+    "recommended_fixed_version": "1.10.0",
+    "all_seen_fixed_versions": [
+      "1.10.0"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "handlebars",
+    "installed_version": "4.7.8",
+    "recommended_fixed_version": "4.7.7",
+    "all_seen_fixed_versions": [
+      ">=4.6.0",
+      "4.7.7"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "hawk",
+    "installed_version": "6.0.2",
+    "recommended_fixed_version": "9.0.1",
+    "all_seen_fixed_versions": [
+      "9.0.1"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "hoek",
+    "installed_version": "4.2.0",
+    "recommended_fixed_version": ">=5.0.3 >=4.2.1",
+    "all_seen_fixed_versions": [
+      ">=5.0.3 >=4.2.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "hosted-git-info",
+    "installed_version": "2.8.9",
+    "recommended_fixed_version": "2.8.9, 3.0.8",
+    "all_seen_fixed_versions": [
+      "2.8.9, 3.0.8"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "http-cache-semantics",
+    "installed_version": "4.1.1",
+    "recommended_fixed_version": "4.1.1",
+    "all_seen_fixed_versions": [
+      "4.1.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "http-proxy",
+    "installed_version": "1.18.1",
+    "recommended_fixed_version": "1.18.1",
+    "all_seen_fixed_versions": [
+      "1.18.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "http-proxy-middleware",
+    "installed_version": "3.0.3",
+    "recommended_fixed_version": "2.0.9, 3.0.5",
+    "all_seen_fixed_versions": [
+      "2.0.7, 3.0.3",
+      "2.0.8, 3.0.4",
+      "2.0.9, 3.0.5"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "image-size",
+    "installed_version": "1.1.1",
+    "recommended_fixed_version": "1.2.1, 2.0.2",
+    "all_seen_fixed_versions": [
+      "1.2.1, 2.0.2"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "ini",
+    "installed_version": "2.0.0",
+    "recommended_fixed_version": "1.3.6",
+    "all_seen_fixed_versions": [
+      "1.3.6"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "ip",
+    "installed_version": "1.1.9",
+    "recommended_fixed_version": "2.0.1, 1.1.9",
+    "all_seen_fixed_versions": [
+      "2.0.1, 1.1.9"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "is-my-json-valid",
+    "installed_version": "2.20.5",
+    "recommended_fixed_version": "2.17.2, 1.4.1",
+    "all_seen_fixed_versions": [
+      ">=1.4.1 <2.0.0, >=2.17.2",
+      "2.17.2, 1.4.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "is-svg",
+    "installed_version": "4.3.1",
+    "recommended_fixed_version": "4.3.0",
+    "all_seen_fixed_versions": [
+      "4.2.2",
+      "4.3.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "jpeg-js",
+    "installed_version": "0.1.2",
+    "recommended_fixed_version": "0.4.4",
+    "all_seen_fixed_versions": [
+      "0.4.0",
+      "0.4.4"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "js-yaml",
+    "installed_version": "4.1.0",
+    "recommended_fixed_version": "3.13.1",
+    "all_seen_fixed_versions": [
+      "3.13.0",
+      "3.13.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "json-schema",
+    "installed_version": "0.4.0",
+    "recommended_fixed_version": "0.4.0",
+    "all_seen_fixed_versions": [
+      "0.4.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "json5",
+    "installed_version": "2.2.3",
+    "recommended_fixed_version": "2.2.2, 1.0.2",
+    "all_seen_fixed_versions": [
+      "2.2.2, 1.0.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "jsonpointer",
+    "installed_version": "5.0.1",
+    "recommended_fixed_version": "5.0.0",
+    "all_seen_fixed_versions": [
+      "5.0.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "kind-of",
+    "installed_version": "6.0.3",
+    "recommended_fixed_version": "6.0.3",
+    "all_seen_fixed_versions": [
+      "6.0.3"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "loader-utils",
+    "installed_version": "3.3.1",
+    "recommended_fixed_version": "2.0.3, 1.4.1",
+    "all_seen_fixed_versions": [
+      "1.4.2, 2.0.4, 3.2.1",
+      "2.0.3, 1.4.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "lodash",
+    "installed_version": "4.17.4",
+    "recommended_fixed_version": "4.17.21",
+    "all_seen_fixed_versions": [
+      ">=4.17.5",
+      ">=4.17.11",
+      ">=4.17.19",
+      "4.17.11",
+      "4.17.12",
+      "4.17.19",
+      "4.17.21"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "macaddress",
+    "installed_version": "0.2.8",
+    "recommended_fixed_version": "0.2.9",
+    "all_seen_fixed_versions": [
+      "0.2.9"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "marked",
+    "installed_version": "0.7.0",
+    "recommended_fixed_version": "4.0.10",
+    "all_seen_fixed_versions": [
+      "0.3.7",
+      "0.3.9",
+      "0.3.17",
+      "4.0.10"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "mem",
+    "installed_version": "5.1.1",
+    "recommended_fixed_version": "4.0.0",
+    "all_seen_fixed_versions": [
+      "4.0.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "merge",
+    "installed_version": "2.1.1",
+    "recommended_fixed_version": "2.1.1",
+    "all_seen_fixed_versions": [
+      "1.2.1",
+      "2.1.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "micromatch",
+    "installed_version": "4.0.8",
+    "recommended_fixed_version": "4.0.8",
+    "all_seen_fixed_versions": [
+      "4.0.8"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "mime",
+    "installed_version": "2.4.0",
+    "recommended_fixed_version": "2.0.3, 1.4.1",
+    "all_seen_fixed_versions": [
+      "2.0.3, 1.4.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "minimatch",
+    "installed_version": "9.0.5",
+    "recommended_fixed_version": "3.0.5",
+    "all_seen_fixed_versions": [
+      "3.0.5"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "minimist",
+    "installed_version": "1.2.8",
+    "recommended_fixed_version": "1.2.6, 0.2.4",
+    "all_seen_fixed_versions": [
+      "0.2.1, 1.2.3",
+      "1.2.6, 0.2.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "mout",
+    "installed_version": "1.2.4",
+    "recommended_fixed_version": "1.2.4",
+    "all_seen_fixed_versions": [
+      "1.2.3",
+      "1.2.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "ms",
+    "installed_version": "2.1.3",
+    "recommended_fixed_version": "2.0.0",
+    "all_seen_fixed_versions": [
+      "2.0.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "nanoid",
+    "installed_version": "3.3.8",
+    "recommended_fixed_version": "5.0.9, 3.3.8",
+    "all_seen_fixed_versions": [
+      "5.0.9, 3.3.8"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "no-case",
+    "installed_version": "3.0.4",
+    "recommended_fixed_version": "2.3.2",
+    "all_seen_fixed_versions": [
+      "2.3.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "node-fetch",
+    "installed_version": "3.3.2",
+    "recommended_fixed_version": "3.1.1, 2.6.7",
+    "all_seen_fixed_versions": [
+      "3.1.1, 2.6.7"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "node-forge",
+    "installed_version": "1.3.1",
+    "recommended_fixed_version": "1.3.0",
+    "all_seen_fixed_versions": [
+      "0.10.0",
+      "1.0.0",
+      "1.3.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "node-notifier",
+    "installed_version": "5.4.5",
+    "recommended_fixed_version": "8.0.1",
+    "all_seen_fixed_versions": [
+      "8.0.1"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "normalize-url",
+    "installed_version": "8.0.1",
+    "recommended_fixed_version": "4.5.1, 5.3.1, 6.0.1",
+    "all_seen_fixed_versions": [
+      "4.5.1, 5.3.1, 6.0.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "nth-check",
+    "installed_version": "2.1.1",
+    "recommended_fixed_version": "2.0.1",
+    "all_seen_fixed_versions": [
+      "2.0.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "nwmatcher",
+    "installed_version": "1.4.4",
+    "recommended_fixed_version": "1.4.4",
+    "all_seen_fixed_versions": [
+      "1.4.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "on-headers",
+    "installed_version": "1.0.2",
+    "recommended_fixed_version": "1.1.0",
+    "all_seen_fixed_versions": [
+      "1.1.0"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "open",
+    "installed_version": "9.1.0",
+    "recommended_fixed_version": "6.0.0",
+    "all_seen_fixed_versions": [
+      ">=6.0.0",
+      "6.0.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "path-parse",
+    "installed_version": "1.0.7",
+    "recommended_fixed_version": "1.0.7",
+    "all_seen_fixed_versions": [
+      "1.0.7"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "path-to-regexp",
+    "installed_version": "8.2.0",
+    "recommended_fixed_version": "1.9.0, 0.1.10, 8.0.0, 3.3.0, 6.3.0",
+    "all_seen_fixed_versions": [
+      "0.1.12",
+      "1.9.0, 0.1.10, 8.0.0, 3.3.0, 6.3.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "pbkdf2",
+    "installed_version": "3.1.2",
+    "recommended_fixed_version": "3.1.3",
+    "all_seen_fixed_versions": [
+      "3.1.3"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "playwright",
+    "installed_version": "1.56.1",
+    "recommended_fixed_version": "1.55.1",
+    "all_seen_fixed_versions": [
+      "1.55.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "postcss",
+    "installed_version": "8.5.1",
+    "recommended_fixed_version": "8.4.31",
+    "all_seen_fixed_versions": [
+      "7.0.36, 8.2.10",
+      "8.2.13, 7.0.36",
+      "8.4.31"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "puppeteer",
+    "installed_version": "24.7.2",
+    "recommended_fixed_version": "1.13.0",
+    "all_seen_fixed_versions": [
+      "1.13.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "qs",
+    "installed_version": "6.9.7",
+    "recommended_fixed_version": "6.10.3, 6.9.7, 6.8.3, 6.7.3, 6.6.1, 6.5.3, 6.4.1, 6.3.3, 6.2.4",
+    "all_seen_fixed_versions": [
+      "6.0.4, 6.1.2, 6.2.3, 6.3.2",
+      "6.10.3, 6.9.7, 6.8.3, 6.7.3, 6.6.1, 6.5.3, 6.4.1, 6.3.3, 6.2.4"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "querystringify",
+    "installed_version": "2.2.0",
+    "recommended_fixed_version": "2.0.0",
+    "all_seen_fixed_versions": [
+      "2.0.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "randomatic",
+    "installed_version": "3.1.1",
+    "recommended_fixed_version": "3.0.0",
+    "all_seen_fixed_versions": [
+      "3.0.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "react-dev-utils",
+    "installed_version": "5.0.3",
+    "recommended_fixed_version": "11.0.4",
+    "all_seen_fixed_versions": [
+      "1.0.4, 2.0.2, 3.1.2, 4.2.2, 5.0.2",
+      "11.0.4"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "react-dom",
+    "installed_version": "19.2.0",
+    "recommended_fixed_version": "16.0.1, 16.1.2, 16.2.1, 16.3.3, 16.4.2",
+    "all_seen_fixed_versions": [
+      "16.0.1, 16.1.2, 16.2.1, 16.3.3, 16.4.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "requirejs",
+    "installed_version": "2.3.5",
+    "recommended_fixed_version": "2.3.7",
+    "all_seen_fixed_versions": [
+      "2.3.7"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "rollup",
+    "installed_version": "4.35.0",
+    "recommended_fixed_version": "3.29.5, 4.22.4, 2.79.2",
+    "all_seen_fixed_versions": [
+      "3.29.5, 4.22.4, 2.79.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "semver",
+    "installed_version": "7.7.2",
+    "recommended_fixed_version": "7.5.2, 6.3.1, 5.7.2",
+    "all_seen_fixed_versions": [
+      "7.5.2, 6.3.1, 5.7.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "semver-regex",
+    "installed_version": "2.0.0",
+    "recommended_fixed_version": "3.1.4, 4.0.3",
+    "all_seen_fixed_versions": [
+      "3.1.3, 4.0.1",
+      "3.1.4, 4.0.3"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "send",
+    "installed_version": "1.2.0",
+    "recommended_fixed_version": "0.19.0",
+    "all_seen_fixed_versions": [
+      "0.19.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "serialize-javascript",
+    "installed_version": "6.0.2",
+    "recommended_fixed_version": "6.0.2",
+    "all_seen_fixed_versions": [
+      "6.0.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "serve-static",
+    "installed_version": "2.2.0",
+    "recommended_fixed_version": "1.16.0, 2.1.0",
+    "all_seen_fixed_versions": [
+      "1.16.0, 2.1.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "sha.js",
+    "installed_version": "2.4.9",
+    "recommended_fixed_version": "2.4.12",
+    "all_seen_fixed_versions": [
+      "2.4.12"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "shell-quote",
+    "installed_version": "1.8.2",
+    "recommended_fixed_version": "1.7.3",
+    "all_seen_fixed_versions": [
+      "1.7.3"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "shelljs",
+    "installed_version": "0.8.5",
+    "recommended_fixed_version": "0.8.5",
+    "all_seen_fixed_versions": [
+      "0.8.5"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "sockjs",
+    "installed_version": "0.3.24",
+    "recommended_fixed_version": "0.3.20",
+    "all_seen_fixed_versions": [
+      "0.3.20"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "sshpk",
+    "installed_version": "1.18.0",
+    "recommended_fixed_version": "1.13.2",
+    "all_seen_fixed_versions": [
+      ">=1.13.2",
+      "1.13.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "stringstream",
+    "installed_version": "0.0.6",
+    "recommended_fixed_version": ">=0.0.6",
+    "all_seen_fixed_versions": [
+      "0.0.6",
+      ">=0.0.6"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "tar",
+    "installed_version": "2.2.2",
+    "recommended_fixed_version": "6.2.1",
+    "all_seen_fixed_versions": [
+      "3.2.2, 4.4.14, 5.0.6, 6.1.1",
+      "4.4.2, 2.2.2",
+      "4.4.18, 5.0.10, 6.1.9",
+      "6.2.1"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "tar-fs",
+    "installed_version": "3.0.8",
+    "recommended_fixed_version": "3.1.1, 2.1.4, 1.16.6",
+    "all_seen_fixed_versions": [
+      "1.16.2",
+      "1.16.4, 2.1.2, 3.0.7",
+      "1.16.5, 2.1.3, 3.0.9",
+      "3.1.1, 2.1.4, 1.16.6"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "terser",
+    "installed_version": "5.38.0",
+    "recommended_fixed_version": "4.8.1, 5.14.2",
+    "all_seen_fixed_versions": [
+      "4.8.1, 5.14.2"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "thenify",
+    "installed_version": "3.3.1",
+    "recommended_fixed_version": "3.3.1",
+    "all_seen_fixed_versions": [
+      "3.3.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "tmp",
+    "installed_version": "0.2.3",
+    "recommended_fixed_version": "0.2.4",
+    "all_seen_fixed_versions": [
+      "0.2.4"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "tmpl",
+    "installed_version": "1.0.5",
+    "recommended_fixed_version": "1.0.5",
+    "all_seen_fixed_versions": [
+      "1.0.5"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "tough-cookie",
+    "installed_version": "4.1.4",
+    "recommended_fixed_version": "4.1.3",
+    "all_seen_fixed_versions": [
+      "2.3.3",
+      "4.1.3"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "trim",
+    "installed_version": "0.0.1",
+    "recommended_fixed_version": "0.0.3",
+    "all_seen_fixed_versions": [
+      "0.0.3"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "trim-newlines",
+    "installed_version": "1.0.0",
+    "recommended_fixed_version": "3.0.1, 4.0.1",
+    "all_seen_fixed_versions": [
+      "3.0.1, 4.0.1"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "tunnel-agent",
+    "installed_version": "0.6.0",
+    "recommended_fixed_version": "0.6.0",
+    "all_seen_fixed_versions": [
+      ">=0.6.0",
+      "0.6.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "ua-parser-js",
+    "installed_version": "0.7.28",
+    "recommended_fixed_version": "0.7.24",
+    "all_seen_fixed_versions": [
+      "0.7.22",
+      "0.7.23",
+      "0.7.24"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "undici",
+    "installed_version": "6.21.2",
+    "recommended_fixed_version": "5.29.0, 6.21.2, 7.5.0",
+    "all_seen_fixed_versions": [
+      "5.26.2",
+      "5.28.3, 6.6.1",
+      "5.28.4, 6.11.1",
+      "5.28.5, 6.21.1, 7.2.3",
+      "5.29.0, 6.21.2, 7.5.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "urijs",
+    "installed_version": "1.19.6",
+    "recommended_fixed_version": "1.19.11",
+    "all_seen_fixed_versions": [
+      "1.19.4",
+      "1.19.6",
+      "1.19.7",
+      "1.19.8",
+      "1.19.9",
+      "1.19.10",
+      "1.19.11"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "url-parse",
+    "installed_version": "1.5.10",
+    "recommended_fixed_version": "1.5.9",
+    "all_seen_fixed_versions": [
+      ">=1.4.3",
+      "1.4.5",
+      "1.5.0",
+      "1.5.2",
+      "1.5.6",
+      "1.5.7",
+      "1.5.8",
+      "1.5.9"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "webpack",
+    "installed_version": "5.97.1",
+    "recommended_fixed_version": "5.94.0",
+    "all_seen_fixed_versions": [
+      "5.94.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "webpack-dev-middleware",
+    "installed_version": "5.3.4",
+    "recommended_fixed_version": "7.1.0, 6.1.2, 5.3.4",
+    "all_seen_fixed_versions": [
+      "7.1.0, 6.1.2, 5.3.4"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "webpack-dev-server",
+    "installed_version": "4.15.2",
+    "recommended_fixed_version": "5.2.1",
+    "all_seen_fixed_versions": [
+      ">=3.1.11",
+      "5.2.1"
+    ],
+    "upgrade_needed": true
+  },
+  {
+    "package_name": "websocket-extensions",
+    "installed_version": "0.1.4",
+    "recommended_fixed_version": "0.1.4",
+    "all_seen_fixed_versions": [
+      "0.1.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "word-wrap",
+    "installed_version": "1.2.5",
+    "recommended_fixed_version": "1.2.4",
+    "all_seen_fixed_versions": [
+      "1.2.4"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "ws",
+    "installed_version": "8.18.1",
+    "recommended_fixed_version": "5.2.4, 6.2.3, 7.5.10, 8.17.1",
+    "all_seen_fixed_versions": [
+      "5.2.4, 6.2.3, 7.5.10, 8.17.1"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "xml2js",
+    "installed_version": "0.5.0",
+    "recommended_fixed_version": "0.5.0",
+    "all_seen_fixed_versions": [
+      "0.5.0"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "y18n",
+    "installed_version": "5.0.8",
+    "recommended_fixed_version": "3.2.2, 4.0.1, 5.0.5",
+    "all_seen_fixed_versions": [
+      "3.2.2, 4.0.1, 5.0.5"
+    ],
+    "upgrade_needed": false
+  },
+  {
+    "package_name": "yargs-parser",
+    "installed_version": "7.0.0",
+    "recommended_fixed_version": "13.1.2, 15.0.1, 18.1.1, 5.0.1",
+    "all_seen_fixed_versions": [
+      "13.1.2, 15.0.1, 18.1.1, 5.0.1"
+    ],
+    "upgrade_needed": true
+  }
+]
