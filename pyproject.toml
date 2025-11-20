@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vulnreach"
-version = "1.0.1"
+version = "1.0.2"
 description = "Smart Vulnerability Reachability Analyzer - Beyond version checking"
 readme = "README.md"
 license = {text = "MIT"}
