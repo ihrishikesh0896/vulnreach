@@ -15,8 +15,6 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 
 from ..config import get_config_loader, VulnReachConfig, ProviderConfig
-
-
 logger = logging.getLogger(__name__)
 
 

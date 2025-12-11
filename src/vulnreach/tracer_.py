@@ -701,20 +701,64 @@ def consolidate_fixed_versions(scan: Dict[str, Any]) -> List[Dict[str, Any]]:
     for v in scan.get("vulnerabilities", []):
         pkg = (v.get("package_name") or "").lower()
         fv = v.get("fixed_version")
-        if pkg and fv:
-            fixed.setdefault(pkg, []).append(fv)
+        if not pkg or not fv:
+            continue
+
+        # Split comma-separated fixed_version fields into individual versions
+        parts = []
+        try:
+            # Some scanners may return a comma-separated string like "2.4.2, 2.3.3"
+            for part in str(fv).split(','):
+                p = part.strip()
+                if p:
+                    parts.append(p)
+        except Exception:
+            parts = [str(fv).strip()]
+
+        if parts:
+            fixed.setdefault(pkg, []).extend(parts)
 
     out = []
     for pkg, fixes in fixed.items():
-        fixes_unique_sorted = sorted(set(fixes), key=version_key)
-        best = fixes_unique_sorted[-1] if fixes_unique_sorted else None
+        # Normalize unique versions and sort them using version_key
+        unique_fixes = sorted({f for f in fixes if f}, key=version_key)
+
+        # Determine current installed version (may be None)
         current = installed.get(pkg)
-        upgrade_needed = bool(best and current and version_key(current) < version_key(best))
+
+        # If we can parse current version, filter to only include fixes strictly greater
+        greater_fixes = []
+        if current and isinstance(current, str):
+            try:
+                current_key = version_key(current)
+                for fv in unique_fixes:
+                    fv_key = version_key(fv)
+                    # Only include if fv_key is a valid parsed tuple and strictly greater
+                    if fv_key and fv_key > current_key:
+                        greater_fixes.append(fv)
+            except Exception:
+                # If any parsing fails, fall back to including all unique fixes
+                greater_fixes = unique_fixes[:]
+        else:
+            # No installed version known - include all unique fixes
+            greater_fixes = unique_fixes[:]
+
+        # Choose recommended fixed version(s): list of greater fixes (highest first)
+        if greater_fixes:
+            # Recommended string: highest-first, comma-separated
+            recommended = ', '.join(sorted(greater_fixes, key=version_key, reverse=True))
+            all_seen = greater_fixes
+            upgrade_needed = True
+        else:
+            recommended = None
+            all_seen = []
+            upgrade_needed = False
+
         out.append({
             "package_name": pkg,
             "installed_version": current,
-            "recommended_fixed_version": best,
-            "all_seen_fixed_versions": fixes_unique_sorted,
+            "recommended_fixed_version": recommended,
+            "all_seen_fixed_versions": all_seen,
             "upgrade_needed": upgrade_needed,
         })
     return out
