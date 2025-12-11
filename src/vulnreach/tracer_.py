@@ -884,7 +884,24 @@ def run_ai_workflow(vulnerabilities: List[Vulnerability], components: List[Compo
         print(f"\n🤖 AI analysis completed successfully!")
         print(f"📄 Comprehensive AI report saved to: {ai_report_path}")
         print(f"🎯 Priority actions identified: {ai_summary.critical_recommendations + ai_summary.high_priority_actions}")
-        
+
+        # If LLM fix mode is enabled, request LLM-based remediation fixes
+        try:
+            consolidated_path = os.path.join(project_findings_dir, 'consolidated.json')
+            llm_output_path = os.path.join(project_findings_dir, 'llm_recommendations.json')
+            reachability_paths = [p for p in reachability_report_paths if os.path.exists(p)]
+            if reachability_paths and os.path.exists(consolidated_path):
+                print("🔁 Requesting LLM remediation recommendations (local Ollama)...")
+                llm_result = ai_analyzer.request_llm_fix_from_files(consolidated_path, reachability_paths, llm_output_path)
+                if llm_result:
+                    print(f"✅ LLM remediation recommendations saved to: {llm_output_path}")
+                else:
+                    print("⚠️  LLM did not return recommendations or parsing failed")
+            else:
+                print("⚠️  Skipping LLM remediation: missing consolidated.json or reachability reports")
+        except Exception as e:
+            print(f"⚠️  Error requesting LLM remediation: {e}")
+
     except Exception as e:
         print(f"❌ Error in AI workflow: {e}")
         print("💡 Falling back to traditional analysis workflow")
@@ -978,7 +995,7 @@ Examples:
     ai_workflow_enabled = False
     if args.llm_fix:
         from vulnreach.config import get_config_loader
-        
+
         config_path = os.path.expanduser("~/.vulnreach/config/creds.yaml")
         if not os.path.exists(config_path):
             print("❌ AI workflow requires configuration file but creds.yaml not found")
@@ -987,7 +1004,7 @@ Examples:
             try:
                 config_loader = get_config_loader()
                 has_keys, valid_providers = config_loader.has_valid_api_keys()
-                
+
                 if has_keys:
                     ai_workflow_enabled = True
                     print(f"🤖 Using AI workflow with providers: {', '.join(valid_providers)}")

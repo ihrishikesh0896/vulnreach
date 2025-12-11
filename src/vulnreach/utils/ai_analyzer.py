@@ -11,8 +11,9 @@ import os
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
+import requests
 
 from ..config import get_config_loader, VulnReachConfig, ProviderConfig
 logger = logging.getLogger(__name__)
@@ -34,6 +35,10 @@ class AIAnalysisResult:
     estimated_effort: str  # LOW, MEDIUM, HIGH
     business_impact: str
     technical_complexity: str
+    # New fields: short-term and long-term actions + risk summary (optional)
+    short_term_actions: List[str] = field(default_factory=list)
+    long_term_actions: List[str] = field(default_factory=list)
+    risk_associated: Optional[str] = None
 
 
 @dataclass
@@ -51,8 +56,17 @@ class AIAnalysisSummary:
 
 
 class AIVulnerabilityAnalyzer:
-    """AI-powered vulnerability analyzer that integrates all security analysis results"""
-    
+    """
+    FastAPI-based LLM proxy that sends vulnerability analysis requests to a local OSS LLM server
+    (e.g., Ollama at http://localhost:11434/api/generate)
+
+    Features:
+    - Accepts structured package vulnerability data
+    - Builds prompts requesting short-term and long-term fixes
+    - Calls local model endpoint with retries and timeouts
+    - Safe validation, mock mode for offline testing
+    """
+
     def __init__(self, config: Optional[VulnReachConfig] = None):
         """
         Initialize AI analyzer
@@ -67,7 +81,15 @@ class AIVulnerabilityAnalyzer:
         self.config = config
         self.analysis_timestamp = datetime.now().isoformat()
         
-    def analyze_integrated_results(self, 
+        # LLM configuration
+        self.llm_host = os.getenv("LLM_HOST", "http://localhost:11434")
+        self.llm_generate_path = os.getenv("LLM_GENERATE_PATH", "/api/generate")
+        self.llm_url = self.llm_host.rstrip('/') + self.llm_generate_path
+        self.default_timeout = int(os.getenv("LLM_TIMEOUT", "60"))
+        self.retry_count = int(os.getenv("LLM_RETRIES", "2"))
+        self.mock_mode = os.getenv("VULNREACH_AI_MOCK", "0") == "1"
+
+    def analyze_integrated_results(self,
                                  vulnerability_data: List[Dict],
                                  reachability_data: Dict,
                                  exploitability_data: Dict) -> Tuple[List[AIAnalysisResult], AIAnalysisSummary]:
@@ -100,40 +122,64 @@ class AIVulnerabilityAnalyzer:
         
         logger.info(f"Completed AI analysis of {len(ai_analyses)} vulnerabilities")
         return ai_analyses, summary
-        
-    def _integrate_vulnerability_data(self, 
-                                    vuln_data: List[Dict],
-                                    reach_data: Dict,
-                                    exploit_data: Dict) -> List[Dict]:
+
+    def _integrate_vulnerability_data(self,
+                                      vuln_data: List[Dict],
+                                      reach_data: Dict,
+                                      exploit_data: Dict) -> List[Dict]:
         """
-        Integrate data from all analysis phases
-        
-        Returns:
-            List of integrated vulnerability records with all available data
+        Integrate data from all analysis phases with robust matching strategies.
+        Attempts to match on:
+          - package name (case-insensitive)
+          - package name + version
+          - vulnerability id (vuln['id'])
+          - CVE id if available
         """
         integrated = []
-        
-        # Create lookup dictionaries for efficient integration
+
+        # Build reachability lookup by multiple keys
         reachability_lookup = {}
         if reach_data and 'vulnerabilities' in reach_data:
             for vuln in reach_data['vulnerabilities']:
-                key = f"{vuln.get('package_name', '')}"
-                reachability_lookup[key] = vuln
-        
+                pkg = (vuln.get('package_name') or '').lower()
+                ver = vuln.get('installed_version', '')
+                if pkg:
+                    reachability_lookup[pkg] = vuln
+                if pkg and ver:
+                    reachability_lookup[f"{pkg}@{ver}"] = vuln
+                # also index by normalized alias if present
+                alias = vuln.get('package', None)
+                if alias:
+                    reachability_lookup[(alias or '').lower()] = vuln
+
+        # Build exploitability lookup by CVE and other ids
         exploitability_lookup = {}
         if exploit_data and 'vulnerability_analyses' in exploit_data:
             for vuln in exploit_data['vulnerability_analyses']:
-                key = f"{vuln.get('cve_id', '')}"
-                exploitability_lookup[key] = vuln
-        
-        # Integrate data for each vulnerability
+                cve = (vuln.get('cve_id') or '').upper()
+                vid = vuln.get('vulnerability_id') or vuln.get('id') or ''
+                if cve:
+                    exploitability_lookup[cve] = vuln
+                if vid:
+                    exploitability_lookup[vid] = vuln
+
+        # Integrate
         for vuln in vuln_data:
             integrated_vuln = vuln.copy()
-            
-            # Add reachability data
-            reach_key = vuln.get('package_name', '')
-            if reach_key in reachability_lookup:
-                reach_info = reachability_lookup[reach_key]
+
+            # build candidate keys
+            pkg = (vuln.get('package_name') or '').lower()
+            ver = vuln.get('package_version', '')
+            vuln_id = (vuln.get('id') or '').upper()
+
+            # reachability match: prefer package@version, then package
+            reach_info = None
+            if pkg and ver and f"{pkg}@{ver}" in reachability_lookup:
+                reach_info = reachability_lookup[f"{pkg}@{ver}"]
+            elif pkg and pkg in reachability_lookup:
+                reach_info = reachability_lookup[pkg]
+
+            if reach_info:
                 integrated_vuln.update({
                     'reachability_criticality': reach_info.get('criticality', 'UNKNOWN'),
                     'is_reachable': reach_info.get('is_used', False),
@@ -151,11 +197,17 @@ class AIVulnerabilityAnalyzer:
                     'files_affected': 0,
                     'total_usages': 0
                 })
-            
-            # Add exploitability data
-            exploit_key = vuln.get('id', '')
-            if exploit_key in exploitability_lookup:
-                exploit_info = exploitability_lookup[exploit_key]
+
+            # exploitability match: try CVE (vuln_id often contains CVE), then vulnerability id
+            exploit_info = None
+            if vuln_id and vuln_id in exploitability_lookup:
+                exploit_info = exploitability_lookup[vuln_id]
+            else:
+                # try uppercase CVE style if id looks like CVE-...
+                if vuln_id.startswith('CVE-') and vuln_id in exploitability_lookup:
+                    exploit_info = exploitability_lookup[vuln_id]
+
+            if exploit_info:
                 integrated_vuln.update({
                     'exploit_risk_level': exploit_info.get('exploit_risk_level', 'NONE'),
                     'has_public_exploits': exploit_info.get('has_public_exploits', False),
@@ -169,15 +221,139 @@ class AIVulnerabilityAnalyzer:
                     'exploit_count': 0,
                     'exploits_found': []
                 })
-            
+
             integrated.append(integrated_vuln)
-        
+
         return integrated
-        
+
+
+
+    def _build_prompt(self, packages_data: List[Dict[str, Any]]) -> str:
+        """Build prompt for LLM from package vulnerability data"""
+        prompt_header = (
+            "Analyze the following security vulnerability data (Python packages) and provide clear,\n"
+            "actionable Short-Term Fixes and Long-Term Fixes for the entire set of packages.\n"
+            "Focus on the recommended fixed versions and explain the urgency.\n\n"
+        )
+
+        prompt_footer = (
+            "\n\nOutput format: valid JSON only. Top-level object with keys:\n"
+            "  - short_term_fixes: array of {package, installed_version, recommended_fixed_version, reason, urgency}\n"
+            "  - long_term_fixes: array of {package, recommendation, rationale}\n"
+            "  - summary: one-line summary of urgency and recommended next steps\n"
+        )
+
+        try:
+            data_str = json.dumps(packages_data, indent=2)
+        except Exception:
+            data_str = str(packages_data)
+
+        return prompt_header + "Data:\n\n" + data_str + prompt_footer
+
+    def _call_provider(self, prompt: str, timeout: int = None, model: str = None) -> Optional[str]:
+        """
+        Call local LLM server with retry logic.
+
+        Args:
+            prompt: The prompt string to send
+            timeout: Request timeout in seconds
+            model: Model name (uses env OLLAMA_MODEL or config default if None)
+
+        Returns:
+            LLM response text or None on failure
+        """
+        if timeout is None:
+            timeout = self.default_timeout
+
+        # Mock mode for offline testing
+        if self.mock_mode:
+            logger.info("MOCK_MODE enabled: returning deterministic sample response")
+            sample = {
+                "short_term_fixes": [
+                    {
+                        "package": "flask",
+                        "installed_version": "1.0.0",
+                        "recommended_fixed_version": "2.3.2",
+                        "reason": "Multiple critical CVEs fixed in 2.3.x",
+                        "urgency": "HIGH"
+                    }
+                ],
+                "long_term_fixes": [
+                    {
+                        "package": "all",
+                        "recommendation": "Adopt pinned dependencies and automated updates",
+                        "rationale": "Reduce upgrade churn and automate security updates"
+                    }
+                ],
+                "summary": "Urgent: Patch critical packages immediately; schedule upgrades within next sprint"
+            }
+            return json.dumps(sample)
+
+        # Determine model to use
+        if model is None:
+            model = os.getenv('OLLAMA_MODEL', 'gpt-oss:120b-cloud')
+
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False
+        }
+
+        logger.info(f"Calling LLM at {self.llm_url} with model={model}")
+        print(f"🔁 Attempting LLM call at {self.llm_url} using model={model}")
+
+        # Retry loop
+        for attempt in range(self.retry_count + 1):
+            try:
+                resp = requests.post(
+                    self.llm_url,
+                    json=payload,
+                    headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
+                    timeout=timeout
+                )
+                resp.raise_for_status()
+
+                # Try to parse response
+                content_type = resp.headers.get('content-type', '')
+                body = resp.text
+
+                if 'application/json' in content_type:
+                    return body
+
+                # Try to parse as JSON
+                try:
+                    json.loads(body)
+                    return body
+                except Exception:
+                    # Try to extract first JSON object
+                    import re
+                    match = re.search(r'\{.*\}', body, re.DOTALL)
+                    if match:
+                        candidate = match.group(0)
+                        try:
+                            json.loads(candidate)
+                            return candidate
+                        except Exception:
+                            pass
+
+                # Return raw body as fallback
+                return body
+
+            except Exception as e:
+                logger.warning(f"LLM call attempt {attempt+1}/{self.retry_count+1} failed: {e}")
+                if attempt < self.retry_count:
+                    import time
+                    time.sleep(1)
+                    continue
+                logger.exception(f"All LLM call attempts failed")
+                return None
+
+        return None
+
     def _analyze_single_vulnerability_with_ai(self, vuln_data: Dict) -> AIAnalysisResult:
         """
-        Analyze a single vulnerability using AI reasoning
-        
+        Analyze a single vulnerability using heuristic scoring
+
         Args:
             vuln_data: Integrated vulnerability data
             
@@ -208,11 +384,16 @@ class AIVulnerabilityAnalyzer:
             has_exploits, files_affected, total_usages
         )
         
-        # Generate AI recommendations
+        # Generate heuristic recommendations (no per-vuln LLM calls)
         recommendation, reasoning, remediation_steps = self._generate_ai_recommendation(
             vuln_data, priority_score
         )
-        
+
+        # Use heuristic actions
+        short_term_actions = remediation_steps[:2] if len(remediation_steps) >= 2 else remediation_steps
+        long_term_actions = remediation_steps[2:5] if len(remediation_steps) > 2 else []
+        risk_associated = f"{severity} severity with priority score {priority_score:.1f}/10"
+
         # Estimate effort and complexity
         effort = self._estimate_remediation_effort(vuln_data, reachability_status)
         complexity = self._assess_technical_complexity(vuln_data)
@@ -231,7 +412,10 @@ class AIVulnerabilityAnalyzer:
             remediation_steps=remediation_steps,
             estimated_effort=effort,
             business_impact=business_impact,
-            technical_complexity=complexity
+            technical_complexity=complexity,
+            short_term_actions=short_term_actions,
+            long_term_actions=long_term_actions,
+            risk_associated=risk_associated
         )
         
     def _calculate_ai_priority_score(self, 
@@ -526,11 +710,19 @@ class AIVulnerabilityAnalyzer:
         Returns:
             Report dictionary
         """
+        provider_used = self.config.default_provider if self.config else 'none'
+        provider_model = None
+        if self.config and getattr(self.config, 'providers', None):
+            prov = self.config.providers.get(provider_used)
+            if prov and getattr(prov, 'models', None):
+                provider_model = prov.models.get('chat')
+
         report = {
             'metadata': {
                 'analysis_timestamp': self.analysis_timestamp,
                 'tool_version': 'vulnreach-ai-1.0',
-                'ai_model_used': self.config.default_provider if self.config else 'none',
+                'ai_provider': provider_used,
+                'ai_model_used': provider_model or 'n/a',
                 'analysis_type': 'AI-powered integrated vulnerability analysis'
             },
             'summary': asdict(summary),
@@ -545,43 +737,41 @@ class AIVulnerabilityAnalyzer:
             
         logger.info(f"AI analysis report saved to: {output_path}")
         return report
-        
+
     def _generate_actionable_insights(self, analyses: List[AIAnalysisResult], summary: AIAnalysisSummary) -> Dict[str, Any]:
         """Generate actionable insights from the analysis"""
-        immediate_actions = [
-            analysis for analysis in analyses 
-            if analysis.ai_priority_score >= 8.0
+        immediate_actions = [a for a in analyses if a.ai_priority_score >= 8.0]
+        items = [
+            {
+                'vulnerability': ia.vulnerability_id,
+                'package': ia.package_name,
+                'recommendation': ia.ai_recommendation,
+                'short_term_actions': ia.short_term_actions or ia.remediation_steps[:2],
+                'long_term_actions': ia.long_term_actions
+            }
+            for ia in immediate_actions[:10]
         ]
-        
-        return {
+
+        insights = {
             'immediate_actions_required': len(immediate_actions),
-            'immediate_action_items': [
-                {
-                    'vulnerability': action.vulnerability_id,
-                    'package': action.package_name,
-                    'recommendation': action.ai_recommendation,
-                    'steps': action.remediation_steps[:3]  # Top 3 steps
-                }
-                for action in immediate_actions[:5]  # Top 5 most critical
-            ],
+            'immediate_action_items': items,
             'security_improvement_roadmap': [
                 'Address critical vulnerabilities within 24-48 hours',
                 'Implement automated security scanning in CI/CD pipeline',
-                'Establish regular dependency update schedule',
-                'Create incident response plan for security vulnerabilities',
-                'Train development team on secure coding practices'
+                'Establish regular dependency update cadence',
+                'Maintain an incident response runbook for security issues'
             ],
             'recommended_tools_and_processes': [
                 'Automated dependency scanning (e.g., Dependabot, Snyk)',
                 'Security-focused code review process',
                 'Regular penetration testing',
-                'Vulnerability management workflow',
-                'Security awareness training program'
+                'Vulnerability management workflow'
             ]
         }
-        
+        return insights
+
     def _generate_executive_summary(self, summary: AIAnalysisSummary) -> Dict[str, str]:
-        """Generate executive-level summary"""
+        """Generate executive-level summary (compact)"""
         return {
             'overall_assessment': self._get_overall_assessment(summary.overall_security_score),
             'key_findings': f"Analysis identified {summary.total_vulnerabilities} vulnerabilities with {summary.critical_recommendations} requiring immediate attention",
@@ -589,7 +779,8 @@ class AIVulnerabilityAnalyzer:
             'recommended_timeline': self._get_recommended_timeline(summary),
             'resource_requirements': self._estimate_resource_requirements(summary)
         }
-        
+
+    # Helper methods used by executive summary (restored)
     def _get_overall_assessment(self, security_score: float) -> str:
         """Get overall security assessment"""
         if security_score >= 90:
@@ -602,7 +793,7 @@ class AIVulnerabilityAnalyzer:
             return "POOR - Application has significant security vulnerabilities requiring immediate attention"
         else:
             return "CRITICAL - Application has severe security issues that pose immediate risk"
-            
+
     def _assess_overall_business_risk(self, summary: AIAnalysisSummary) -> str:
         """Assess overall business risk"""
         if summary.critical_recommendations > 5:
@@ -613,7 +804,7 @@ class AIVulnerabilityAnalyzer:
             return "MEDIUM - Numerous high-priority vulnerabilities need addressing"
         else:
             return "LOW - Manageable number of vulnerabilities with standard remediation process"
-            
+
     def _get_recommended_timeline(self, summary: AIAnalysisSummary) -> str:
         """Get recommended remediation timeline"""
         if summary.critical_recommendations > 0:
@@ -622,11 +813,10 @@ class AIVulnerabilityAnalyzer:
             return "ACCELERATED - Complete high-priority items within 1-2 weeks, medium priority within 1 month"
         else:
             return "STANDARD - Address items during regular maintenance cycles over next 2-3 months"
-            
+
     def _estimate_resource_requirements(self, summary: AIAnalysisSummary) -> str:
         """Estimate resource requirements"""
         total_actions = summary.critical_recommendations + summary.high_priority_actions + summary.medium_priority_actions
-        
         if total_actions > 20:
             return "SIGNIFICANT - May require dedicated security sprint or external security consulting"
         elif total_actions > 10:
@@ -634,7 +824,83 @@ class AIVulnerabilityAnalyzer:
         else:
             return "MINIMAL - Can be addressed during regular development cycles"
 
+    def request_llm_fix_from_files(self, consolidated_path: str, reachability_paths: List[str], output_path: str, timeout: int = 60) -> Optional[Dict[str, Any]]:
+        """
+        Read consolidated.json and reachability report(s), build prompt and call local LLM.
 
+        Args:
+            consolidated_path: Path to consolidated.json with package vulnerability data
+            reachability_paths: List of paths to reachability analysis reports
+            output_path: Where to save the LLM's JSON response
+            timeout: Request timeout in seconds
+
+        Returns:
+            Parsed JSON dict from LLM or None on failure
+        """
+        try:
+            # Load consolidated package data
+            consolidated = []
+            if consolidated_path and os.path.exists(consolidated_path):
+                with open(consolidated_path, 'r') as f:
+                    consolidated = json.load(f)
+                    if not isinstance(consolidated, list):
+                        consolidated = [consolidated]
+            else:
+                logger.warning(f"Consolidated file not found: {consolidated_path}")
+
+            if not consolidated:
+                logger.warning("No package data to analyze")
+                return None
+
+            # Build prompt using the new template
+            prompt = self._build_prompt(consolidated)
+
+            # Get model name
+            model = os.getenv('OLLAMA_MODEL') or 'gpt-oss:120b-cloud'
+
+            # Call LLM
+            logger.info(f"Requesting LLM analysis for {len(consolidated)} packages")
+            llm_text = self._call_provider(prompt, timeout=timeout, model=model)
+
+            if not llm_text:
+                logger.warning("LLM returned no result")
+                return None
+
+            # Parse JSON response
+            try:
+                parsed = json.loads(llm_text)
+            except Exception:
+                # Try to extract JSON substring
+                import re
+                match = re.search(r'\{.*\}', llm_text, re.DOTALL)
+                if match:
+                    try:
+                        parsed = json.loads(match.group(0))
+                    except Exception:
+                        logger.exception("Failed to parse JSON from LLM response")
+                        return None
+                else:
+                    logger.exception("No JSON found in LLM response")
+                    return None
+
+            # Validate response has expected keys
+            if not any(k in parsed for k in ("short_term_fixes", "long_term_fixes", "summary")):
+                logger.warning("LLM response missing expected keys; returning as-is")
+
+            # Write output
+            try:
+                with open(output_path, 'w') as f:
+                    json.dump(parsed, f, indent=2)
+                logger.info(f"LLM recommendations saved to: {output_path}")
+                print(f"✅ LLM recommendations saved to: {output_path}")
+            except Exception as e:
+                logger.exception(f"Failed to write output to {output_path}: {e}")
+
+            return parsed
+
+        except Exception as e:
+            logger.exception(f"Error in request_llm_fix_from_files: {e}")
+            return None
 def print_ai_analysis_summary(summary: AIAnalysisSummary):
     """Print AI analysis summary to console"""
     print("\n🤖 AI-POWERED SECURITY ANALYSIS RESULTS")
