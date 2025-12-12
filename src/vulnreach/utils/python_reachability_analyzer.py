@@ -12,8 +12,16 @@ import os
 import re
 from pathlib import Path
 from typing import Dict, List, Set, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from enum import Enum
+
+# Import dependency tree analyzer for transitive dependency detection
+try:
+    from .dependency_tree_analyzer import PythonDependencyTreeAnalyzer
+    HAS_DEP_TREE_ANALYZER = True
+except ImportError:
+    HAS_DEP_TREE_ANALYZER = False
+    print("Warning: dependency_tree_analyzer not available, transitive dependency detection disabled")
 
 
 class CriticalityLevel(Enum):
@@ -41,6 +49,13 @@ class VulnAnalysis:
     usage_contexts: List[UsageContext]
     criticality: CriticalityLevel
     risk_reason: str
+    is_direct_dependency: bool = True  # True if directly declared, False if transitive
+    dependency_depth: int = 0  # 0 for direct, 1+ for transitive
+    required_by: List[str] = None  # List of parent packages (for transitive deps)
+
+    def __post_init__(self):
+        if self.required_by is None:
+            self.required_by = []
 
 
 class PythonReachabilityAnalyzer:
@@ -48,6 +63,14 @@ class PythonReachabilityAnalyzer:
 
     def __init__(self, project_root: str):
         self.project_root = Path(project_root)
+
+        # Initialize dependency tree analyzer for transitive dependency detection
+        self.dep_tree_analyzer = None
+        if HAS_DEP_TREE_ANALYZER:
+            try:
+                self.dep_tree_analyzer = PythonDependencyTreeAnalyzer(str(self.project_root))
+            except Exception as e:
+                print(f"Warning: Could not initialize dependency tree analyzer: {e}")
 
     def find_python_files(self) -> List[Path]:
         """Find all Python source files in the project."""
@@ -322,8 +345,23 @@ class PythonReachabilityAnalyzer:
         analyses = []
         declared_deps = self.get_declared_dependencies()
 
+        # Get dependency tree information for transitive detection
+        all_dep_info = {}
+        if self.dep_tree_analyzer:
+            try:
+                all_dep_info = self.dep_tree_analyzer.get_all_dependencies()
+                transitive_count = sum(1 for dep in all_dep_info.values() if not dep.is_direct)
+                print(f"\n🔗 Dependency Tree Analysis:")
+                print(f"   Direct dependencies: {len(declared_deps)}")
+                print(f"   Transitive dependencies: {transitive_count}")
+            except Exception as e:
+                print(f"   Warning: Could not analyze dependency tree: {e}")
+        else:
+            print(f"\n📦 Basic Dependency Analysis:")
+            print(f"   Found {len(declared_deps)} declared dependencies")
+            print(f"   (Install 'pipdeptree' for transitive dependency detection)")
+
         print(f"\n🔍 Analyzing Python vulnerability reachability...")
-        print(f"   Found {len(declared_deps)} declared dependencies")
 
         for vuln in vuln_data:
             package_name = vuln.get('package_name', '')
@@ -333,14 +371,42 @@ class PythonReachabilityAnalyzer:
             if not package_name:
                 continue
 
+            normalized_name = self.normalize_package_name(package_name)
             print(f"\n   Analyzing: {package_name} @ {installed_version}")
 
             # Find usage
             usage_contexts = self.find_package_usage(package_name)
-            is_declared = self.normalize_package_name(package_name) in declared_deps
+            is_declared = normalized_name in declared_deps
+
+            # Get dependency information (direct vs transitive)
+            is_direct = True
+            depth = 0
+            required_by = []
+
+            if self.dep_tree_analyzer and normalized_name in all_dep_info:
+                dep_info = all_dep_info[normalized_name]
+                is_direct = dep_info.is_direct
+                depth = dep_info.depth
+                required_by = dep_info.parent_dependencies
+
+                if not is_direct:
+                    parents_str = ', '.join(required_by[:3])
+                    if len(required_by) > 3:
+                        parents_str += f", +{len(required_by)-3} more"
+                    print(f"      ⚠️  TRANSITIVE dependency (required by: {parents_str})")
+                else:
+                    print(f"      ✓ Direct dependency")
+            elif is_declared:
+                print(f"      ✓ Direct dependency (declared)")
+            else:
+                print(f"      ? Dependency type unknown")
 
             # Assess risk
             criticality, risk_reason = self.assess_risk(package_name, usage_contexts, is_declared)
+
+            # Adjust risk message for transitive dependencies
+            if not is_direct and depth > 0:
+                risk_reason += f" [TRANSITIVE: depth={depth}, required by {len(required_by)} package(s)]"
 
             analysis = VulnAnalysis(
                 package_name=package_name,
@@ -349,7 +415,10 @@ class PythonReachabilityAnalyzer:
                 is_used=len(usage_contexts) > 0,
                 usage_contexts=usage_contexts[:10],  # Limit to first 10 for brevity
                 criticality=criticality,
-                risk_reason=risk_reason
+                risk_reason=risk_reason,
+                is_direct_dependency=is_direct,
+                dependency_depth=depth,
+                required_by=required_by
             )
 
             analyses.append(analysis)
@@ -367,6 +436,10 @@ class PythonReachabilityAnalyzer:
         low = sum(1 for a in analyses if a.criticality == CriticalityLevel.LOW)
         not_reachable = sum(1 for a in analyses if a.criticality == CriticalityLevel.NOT_REACHABLE)
 
+        # Transitive dependency statistics
+        direct_deps = sum(1 for a in analyses if a.is_direct_dependency)
+        transitive_deps = sum(1 for a in analyses if not a.is_direct_dependency)
+
         report = {
             "summary": {
                 "total_vulnerabilities": total,
@@ -375,6 +448,8 @@ class PythonReachabilityAnalyzer:
                 "medium_reachable": medium,
                 "low_reachable": low,
                 "not_reachable": not_reachable,
+                "direct_dependencies": direct_deps,
+                "transitive_dependencies": transitive_deps,
                 "analysis_timestamp": __import__('datetime').datetime.now().isoformat()
             },
             "vulnerabilities": []
@@ -388,6 +463,11 @@ class PythonReachabilityAnalyzer:
                 "criticality": analysis.criticality.value,
                 "is_used": analysis.is_used,
                 "risk_reason": analysis.risk_reason,
+                "dependency_info": {
+                    "is_direct": analysis.is_direct_dependency,
+                    "depth": analysis.dependency_depth,
+                    "required_by": analysis.required_by if analysis.required_by else []
+                },
                 "usage_details": {
                     "total_usages": len(analysis.usage_contexts),
                     "files_affected": len(set(ctx.file_path for ctx in analysis.usage_contexts)),
@@ -442,11 +522,35 @@ def run_python_reachability_analysis(project_root: str, consolidated_path: str, 
             json.dump(report, f, indent=2)
         print(f"\n✅ Analysis complete! Report saved to: {output_path}")
         print(f"\n📊 Summary:")
+        print(f"   Total Vulnerabilities: {report['summary']['total_vulnerabilities']}")
         print(f"   🔴 Critical: {report['summary']['critical_reachable']}")
         print(f"   🟠 High: {report['summary']['high_reachable']}")
         print(f"   🟡 Medium: {report['summary']['medium_reachable']}")
         print(f"   🟢 Low: {report['summary']['low_reachable']}")
         print(f"   ⚪ Not Reachable: {report['summary']['not_reachable']}")
+
+        # Show transitive dependency statistics
+        if 'direct_dependencies' in report['summary']:
+            print(f"\n🔗 Dependency Type:")
+            print(f"   📦 Direct: {report['summary']['direct_dependencies']}")
+            print(f"   ⚠️  Transitive: {report['summary']['transitive_dependencies']}")
+
+            # Show which transitive deps have vulnerabilities
+            transitive_vulns = [v for v in report['vulnerabilities']
+                              if not v.get('dependency_info', {}).get('is_direct', True)]
+            if transitive_vulns:
+                print(f"\n⚠️  Transitive Dependencies with Vulnerabilities:")
+                for vuln in transitive_vulns[:5]:  # Show first 5
+                    pkg = vuln['package_name']
+                    required_by = vuln.get('dependency_info', {}).get('required_by', [])
+                    if required_by:
+                        parents = ', '.join(required_by[:2])
+                        if len(required_by) > 2:
+                            parents += f", +{len(required_by)-2} more"
+                        print(f"      • {pkg} (required by: {parents})")
+                    else:
+                        print(f"      • {pkg} (indirect)")
+
         print(f"\n{'='*70}\n")
     except Exception as e:
         print(f"Error: Could not save report to {output_path}: {e}")

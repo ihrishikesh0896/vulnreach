@@ -14,11 +14,7 @@ Prerequisites:
 Dependencies:
 pip install requests
 """
-from vulnreach.utils import (
-    multi_language_analyzer,
-    # vuln_reachability_analyzer,
-    java_reachability_analyzer,
-)
+
 from vulnreach.utils.multi_language_analyzer import run_multi_language_analysis
 from vulnreach.utils.exploitability_analyzer import ExploitabilityAnalyzer
 from vulnreach.utils.ai_analyzer import AIVulnerabilityAnalyzer, print_ai_analysis_summary
@@ -103,6 +99,7 @@ class SyftSBOMGenerator:
                 self.syft_path,
                 target,
                 "-o", f"{format}={output_path}",
+                "--catalogers", "all",  # Enable all catalogers for comprehensive detection
                 "--quiet"
             ]
 
@@ -113,11 +110,110 @@ class SyftSBOMGenerator:
                 return False
 
             print(f"✅ SBOM generated successfully: {output_path}")
+
+            # Enhance SBOM with transitive dependency information
+            self._enhance_sbom_with_transitive_info(output_path, target)
+
             return True
 
         except Exception as e:
             print(f"❌ Error generating SBOM: {e}")
             return False
+
+    def _enhance_sbom_with_transitive_info(self, sbom_path: str, project_root: str):
+        """Enhance SBOM with transitive dependency information"""
+        try:
+            print(f"🔗 Enhancing SBOM with transitive dependency information...")
+
+            # Load SBOM
+            with open(sbom_path, 'r') as f:
+                sbom_data = json.load(f)
+
+            # Detect language
+            from vulnreach.utils.multi_language_analyzer import ProjectLanguageDetector
+            detector = ProjectLanguageDetector(project_root)
+            language = detector.detect_language()
+
+            print(f"   Detected language: {language}")
+
+            # Get dependency tree
+            from vulnreach.utils.dependency_tree_analyzer import get_dependency_analyzer
+            analyzer = get_dependency_analyzer(project_root, language)
+
+            if not analyzer:
+                print(f"   ⚠️  No dependency analyzer available for {language}")
+                return
+
+            all_deps = analyzer.get_all_dependencies()
+
+            if not all_deps:
+                print(f"   ⚠️  No dependencies found")
+                return
+
+            enhanced_count = 0
+
+            # Enhance SBOM packages with transitive info
+            if 'packages' in sbom_data:
+                for package in sbom_data['packages']:
+                    pkg_name = package.get('name', '')
+                    if not pkg_name or pkg_name == 'DOCUMENT':
+                        continue
+
+                    # Normalize package name for lookup
+                    normalized_name = pkg_name.lower().replace('_', '-')
+
+                    if normalized_name in all_deps:
+                        dep_info = all_deps[normalized_name]
+                        # Add custom properties
+                        package['is_direct_dependency'] = dep_info.is_direct
+                        package['dependency_depth'] = dep_info.depth
+                        package['required_by'] = dep_info.parent_dependencies
+                        enhanced_count += 1
+
+            # Handle Syft native format
+            elif 'artifacts' in sbom_data:
+                for artifact in sbom_data['artifacts']:
+                    pkg_name = artifact.get('name', '')
+                    if not pkg_name:
+                        continue
+
+                    normalized_name = pkg_name.lower().replace('_', '-')
+
+                    if normalized_name in all_deps:
+                        dep_info = all_deps[normalized_name]
+                        artifact['is_direct_dependency'] = dep_info.is_direct
+                        artifact['dependency_depth'] = dep_info.depth
+                        artifact['required_by'] = dep_info.parent_dependencies
+                        enhanced_count += 1
+
+            # Handle CycloneDX format
+            elif 'components' in sbom_data:
+                for component in sbom_data['components']:
+                    pkg_name = component.get('name', '')
+                    if not pkg_name:
+                        continue
+
+                    normalized_name = pkg_name.lower().replace('_', '-')
+
+                    if normalized_name in all_deps:
+                        dep_info = all_deps[normalized_name]
+                        component['is_direct_dependency'] = dep_info.is_direct
+                        component['dependency_depth'] = dep_info.depth
+                        component['required_by'] = dep_info.parent_dependencies
+                        enhanced_count += 1
+
+            if enhanced_count > 0:
+                # Save enhanced SBOM
+                with open(sbom_path, 'w') as f:
+                    json.dump(sbom_data, f, indent=2)
+
+                print(f"   ✅ Enhanced {enhanced_count} package(s) with transitive dependency info")
+            else:
+                print(f"   ℹ️  No packages matched for enhancement")
+
+        except Exception as e:
+            print(f"   ⚠️  Could not enhance SBOM with transitive info: {e}")
+            # Don't fail, just continue without enhancement
 
     def parse_sbom_components(self, sbom_path: str) -> List[Component]:
         """Parse components from generated SBOM"""
@@ -1098,20 +1194,19 @@ Examples:
 
         else:
             # Generate SBOM first, then scan
-            sbom_path = args.output_sbom or "temp_sbom.json"
-            temp_sbom = not args.output_sbom
+            # Save SBOM to security_findings directory with repo name
+            if not args.output_sbom:
+                sbom_path = os.path.join(project_findings_dir, "sbom.json")
+            else:
+                sbom_path = args.output_sbom
 
             print(f"\n📋 Generating SBOM from: {actual_target}")
             if syft.generate_sbom(actual_target, sbom_path, args.sbom_format):
                 components = syft.parse_sbom_components(sbom_path)
                 vulnerabilities = trivy.scan_sbom(sbom_path, args.trivy_output)
 
-                # Clean up temporary SBOM
-                if temp_sbom:
-                    try:
-                        os.unlink(sbom_path)
-                    except:
-                        pass
+                # SBOM now saved to security_findings directory - no deletion!
+                print(f"💾 SBOM saved to: {sbom_path}")
             else:
                 print("❌ Failed to generate SBOM")
                 sys.exit(1)
@@ -1160,8 +1255,8 @@ Examples:
             # Filter vulnerabilities based on reachability analysis if available
             filtered_vulnerabilities = vulnerabilities
             if reachability_completed:
-                # Load reachability analysis results to filter to analyzed packages only
-                reachable_packages = {}  # package_name -> version mapping
+                # Load reachability analysis results to filter out NOT_REACHABLE vulnerabilities
+                reachable_packages = {}  # package_name -> (version, criticality) mapping
                 reachability_report_paths = [
                     os.path.join(project_findings_dir, "vulnerability_reachability_report.json"),
                     os.path.join(project_findings_dir, "python_vulnerability_reachability_report.json"),
@@ -1178,31 +1273,43 @@ Examples:
                             with open(reachability_path, 'r') as f:
                                 reachability_data = json.load(f)
                             
-                            # Extract packages and versions that were analyzed in reachability analysis
+                            # Extract packages and versions, filtering out NOT_REACHABLE
                             for vuln in reachability_data.get("vulnerabilities", []):
                                 package_name = vuln.get("package_name", "").lower()
                                 installed_version = vuln.get("installed_version", "")
-                                if package_name and installed_version:
-                                    reachable_packages[package_name] = installed_version
-                            
+                                criticality = vuln.get("criticality", "")
+
+                                # Skip NOT_REACHABLE vulnerabilities - they're not actively used!
+                                if criticality != "NOT_REACHABLE" and package_name and installed_version:
+                                    reachable_packages[package_name] = (installed_version, criticality)
+
                             print(f"📊 Found reachability analysis with {len(reachability_data.get('vulnerabilities', []))} packages")
                             break
                         except Exception as e:
                             print(f"⚠️  Warning: Could not load reachability data from {reachability_path}: {e}")
                 
                 if reachable_packages:
-                    # Filter vulnerabilities to only include exact package+version combinations from reachability analysis
+                    # Filter vulnerabilities to only include reachable ones (excluding NOT_REACHABLE)
                     original_count = len(vulnerabilities)
                     filtered_vulnerabilities = []
-                    
+                    not_reachable_count = 0
+
                     for vuln in vulnerabilities:
                         package_key = vuln.pkg_name.lower()
-                        if (package_key in reachable_packages and 
-                            vuln.pkg_version == reachable_packages[package_key]):
-                            filtered_vulnerabilities.append(vuln)
-                    
+                        if package_key in reachable_packages:
+                            version, criticality = reachable_packages[package_key]
+                            if vuln.pkg_version == version:
+                                filtered_vulnerabilities.append(vuln)
+                        else:
+                            # Track skipped vulnerabilities
+                            not_reachable_count += 1
+
                     filtered_count = len(filtered_vulnerabilities)
-                    print(f"🔍 Filtering exploit analysis: {original_count} total vulnerabilities → {filtered_count} vulnerabilities from {len(reachable_packages)} reachability-analyzed packages")
+                    print(f"🔍 Filtering exploit analysis:")
+                    print(f"   Total vulnerabilities: {original_count}")
+                    print(f"   Reachable (CRITICAL/HIGH/MEDIUM/LOW): {filtered_count}")
+                    print(f"   Skipped (NOT_REACHABLE): {not_reachable_count}")
+                    print(f"   ⚡ Focusing on {filtered_count} reachable vulnerabilities for exploit search")
                 else:
                     print("⚠️  No reachability analysis packages found, analyzing all vulnerabilities")
             
