@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import importlib
 from typing import Optional, Callable
-from .vuln_reachability_analyzer import run_reachability_analysis
+from .python_reachability_analyzer import run_python_reachability_analysis
 from .java_reachability_analyzer import run_java_reachability_analysis
 from .javascript_reachability_analyzer import run_javascript_reachability_analysis
 from .php_reachability_analyzer import run_php_reachability_analysis
@@ -172,20 +172,20 @@ def run_multi_language_analysis(project_root: str, consolidated_path: str, outpu
     # Detect project language
     detector = ProjectLanguageDetector(project_root)
     language = detector.detect_language()
-    print('hereeeeee--------------')
+    # print('hereeeeee--------------')
     print(f"🔍 Detected project language: {language.upper()}")
-    print('hereeeeee--------------',language)
+    # print('hereeeeee--------------',language)
     # Run appropriate analyzer
     if language == 'python':
         output_path = os.path.join(output_dir, "python_vulnerability_reachability_report.json")
-        run_reachability_analysis(project_root, consolidated_path, output_path)
+        run_python_reachability_analysis(project_root, consolidated_path, output_path)
 
     elif language == 'java':
         output_path = os.path.join(output_dir, "java_vulnerability_reachability_report.json")
         run_java_reachability_analysis(project_root, consolidated_path, output_path)
 
     elif language == 'javascript':
-        print('hereeeeee--------------')
+        # print('hereeeeee--------------')
         output_path = os.path.join(output_dir, "javascript_vulnerability_reachability_report.json")
         run_javascript_reachability_analysis(project_root, consolidated_path, output_path)
 

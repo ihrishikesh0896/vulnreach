@@ -16,7 +16,7 @@ pip install requests
 """
 from vulnreach.utils import (
     multi_language_analyzer,
-    vuln_reachability_analyzer,
+    # vuln_reachability_analyzer,
     java_reachability_analyzer,
 )
 from vulnreach.utils.multi_language_analyzer import run_multi_language_analysis
@@ -875,7 +875,7 @@ def run_ai_workflow(vulnerabilities: List[Vulnerability], components: List[Compo
         )
         
         # Generate comprehensive AI report
-        ai_report_path = os.path.join(project_findings_dir, "ai_analysis_report.json")
+        ai_report_path = os.path.join(project_findings_dir, "fix_analysis_report.json")
         ai_analyzer.generate_ai_report(ai_analyses, ai_summary, ai_report_path)
         
         # Print AI analysis summary
@@ -1165,7 +1165,11 @@ Examples:
                 reachability_report_paths = [
                     os.path.join(project_findings_dir, "vulnerability_reachability_report.json"),
                     os.path.join(project_findings_dir, "python_vulnerability_reachability_report.json"),
-                    os.path.join(project_findings_dir, "java_vulnerability_reachability_report.json")
+                    os.path.join(project_findings_dir, "php_vulnerability_reachability_report.json"),
+                    os.path.join(project_findings_dir, "csharp_vulnerability_reachability_report.json"),
+                    os.path.join(project_findings_dir, "go_vulnerability_reachability_report.json"),
+                    os.path.join(project_findings_dir, "java_vulnerability_reachability_report.json"),
+                    os.path.join(project_findings_dir, "javascript_vulnerability_reachability_report.json")
                 ]
                 
                 for reachability_path in reachability_report_paths:

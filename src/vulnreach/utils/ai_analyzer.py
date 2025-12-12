@@ -12,10 +12,9 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict, field
-from pathlib import Path
 import requests
 
-from ..config import get_config_loader, VulnReachConfig, ProviderConfig
+from ..config import get_config_loader, VulnReachConfig
 logger = logging.getLogger(__name__)
 
 
@@ -866,22 +865,12 @@ class AIVulnerabilityAnalyzer:
                 logger.warning("LLM returned no result")
                 return None
 
-            # Parse JSON response
-            try:
-                parsed = json.loads(llm_text)
-            except Exception:
-                # Try to extract JSON substring
-                import re
-                match = re.search(r'\{.*\}', llm_text, re.DOTALL)
-                if match:
-                    try:
-                        parsed = json.loads(match.group(0))
-                    except Exception:
-                        logger.exception("Failed to parse JSON from LLM response")
-                        return None
-                else:
-                    logger.exception("No JSON found in LLM response")
-                    return None
+            # Parse JSON response with enhanced handling for Ollama format
+            parsed = self._parse_llm_response(llm_text)
+
+            if not parsed:
+                logger.warning("Failed to parse LLM response")
+                return None
 
             # Validate response has expected keys
             if not any(k in parsed for k in ("short_term_fixes", "long_term_fixes", "summary")):
@@ -901,6 +890,105 @@ class AIVulnerabilityAnalyzer:
         except Exception as e:
             logger.exception(f"Error in request_llm_fix_from_files: {e}")
             return None
+
+    def _parse_llm_response(self, llm_text: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse LLM response handling various formats:
+        - Ollama nested response format (with 'response' field)
+        - Markdown code blocks (```json ... ```)
+        - Plain JSON
+
+        Args:
+            llm_text: Raw LLM response text
+
+        Returns:
+            Parsed JSON dict or None on failure
+        """
+        import re
+
+        try:
+            # First try to parse the outer JSON structure
+            outer_parsed = json.loads(llm_text)
+
+            # Check if it's Ollama's nested format with 'response' field
+            if isinstance(outer_parsed, dict) and 'response' in outer_parsed:
+                logger.info("Detected Ollama nested response format")
+                response_text = outer_parsed.get('response', '')
+
+                # The response field contains a string with escaped JSON
+                # Extract JSON from markdown code blocks if present
+                response_text = self._extract_json_from_markdown(response_text)
+
+                # Try to parse the inner response
+                try:
+                    inner_json = json.loads(response_text)
+                    logger.info("Successfully extracted inner JSON from Ollama response")
+                    return inner_json
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse inner response: {e}")
+                    # If inner parsing fails, check if outer has useful data
+                    if any(k in outer_parsed for k in ('short_term_fixes', 'long_term_fixes', 'summary')):
+                        logger.info("Using outer structure as it contains expected keys")
+                        return outer_parsed
+                    # Otherwise return the outer structure anyway
+                    logger.info("Returning outer structure")
+                    return outer_parsed
+
+            # If not nested format but has expected keys, return as-is
+            return outer_parsed
+
+        except json.JSONDecodeError:
+            logger.info("Initial JSON parse failed, trying alternative extraction methods")
+
+            # Try to extract JSON from markdown code blocks
+            extracted = self._extract_json_from_markdown(llm_text)
+            if extracted != llm_text:
+                try:
+                    return json.loads(extracted)
+                except json.JSONDecodeError:
+                    pass
+
+            # Try to find first JSON object using regex
+            match = re.search(r'\{.*\}', llm_text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse extracted JSON substring")
+
+            logger.error("All JSON parsing attempts failed")
+            return None
+
+    def _extract_json_from_markdown(self, text: str) -> str:
+        """
+        Extract JSON content from markdown code blocks.
+        Handles formats like:
+        ```json
+        { ... }
+        ```
+        or
+        ```
+        { ... }
+        ```
+
+        Args:
+            text: Text potentially containing markdown code blocks
+
+        Returns:
+            Extracted JSON string or original text if no code blocks found
+        """
+        import re
+
+        # Pattern to match markdown code blocks with optional json language specifier
+        pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
+        match = re.search(pattern, text, re.DOTALL)
+
+        if match:
+            extracted = match.group(1).strip()
+            logger.info("Extracted JSON from markdown code block")
+            return extracted
+
+        return text
 def print_ai_analysis_summary(summary: AIAnalysisSummary):
     """Print AI analysis summary to console"""
     print("\n🤖 AI-POWERED SECURITY ANALYSIS RESULTS")
