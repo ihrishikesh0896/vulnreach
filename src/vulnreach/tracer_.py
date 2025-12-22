@@ -16,6 +16,7 @@ pip install requests
 """
 
 from vulnreach.utils.multi_language_analyzer import run_multi_language_analysis
+from vulnreach.utils.reachability_engine import run_reachability_engine
 from vulnreach.utils.exploitability_analyzer import ExploitabilityAnalyzer
 from vulnreach.utils.ai_analyzer import AIVulnerabilityAnalyzer, print_ai_analysis_summary
 from vulnreach.config import get_config_loader
@@ -646,7 +647,7 @@ class SecurityReporter:
         print("=" * 80)
 
 
-def check_prerequisites():
+def check_prerequisites(request_sast: bool = False):
     """Check if required tools are installed"""
     missing_tools = []
 
@@ -658,6 +659,9 @@ def check_prerequisites():
 
     if not shutil.which('git'):
         missing_tools.append("Git")
+
+    if request_sast and not shutil.which('semgrep'):
+        print("⚠️  Semgrep not found. Install Semgrep or skip --run-sast.")
 
     if missing_tools:
         print("❌ Missing required tools:")
@@ -1075,6 +1079,13 @@ Examples:
                         help='Run multi-language vulnerability reachability analysis after security scan')
     parser.add_argument('--run-exploitability', action='store_true',
                         help='Run exploitability analysis using SearchSploit to check for public exploits')
+    parser.add_argument('--run-sast', action='store_true',
+                        help='Run Semgrep SAST signal collection (V1 scope)')
+    parser.add_argument('--semgrep-rules', help='Override Semgrep ruleset path/URL (default: p/security-audit)')
+    parser.add_argument('--run-routes', action='store_true',
+                        help='Extract HTTP routes (Flask/FastAPI/Express/Spring) to routes.json')
+    parser.add_argument('--run-reachability-engine', action='store_true',
+                        help='Link Semgrep sinks to handlers/routes and score reachability')
     parser.add_argument('--init-config', action='store_true',
                         help='Create default configuration file at ~/.vulnreach/config/creds.yaml')
     parser.add_argument('--llm-fix', action='store_true',
@@ -1118,7 +1129,7 @@ Examples:
         sys.exit(1)
 
     # Check prerequisites
-    if not check_prerequisites():
+    if not check_prerequisites(request_sast=args.run_sast):
         sys.exit(1)
 
     print("🚀 Starting Security Analysis with Syft and Trivy...")
@@ -1236,10 +1247,50 @@ Examples:
         reachability_completed = False
         if args.run_reachability or args.llm_fix:
             print("\n🔍 Running multi-language vulnerability reachability analysis...")
-            detected_language = run_multi_language_analysis(actual_target or ".", args.output_consolidated, project_findings_dir)
+            detected_language = run_multi_language_analyzer(actual_target or ".", args.output_consolidated, project_findings_dir)
             print(f"📊 Reachability analysis completed for {detected_language.upper()} project")
             reachability_completed = True
-        
+
+        # Run Semgrep SAST if requested
+        if args.run_sast:
+            try:
+                from vulnreach.utils.semgrep_runner import SemgrepRunner, SemgrepNotFoundError
+
+                semgrep_output = os.path.join(project_findings_dir, "semgrep.json")
+                runner = SemgrepRunner()
+                runner.run_scan(actual_target or ".", semgrep_output, config=args.semgrep_rules)
+                print(f"🧩 Semgrep findings saved to: {semgrep_output}")
+            except SemgrepNotFoundError as err:
+                print(f"⚠️  {err}")
+            except Exception as err:
+                print(f"❌ Semgrep scan failed: {err}")
+
+        # Run route extraction if requested
+        if args.run_routes:
+            try:
+                from vulnreach.utils.route_extractor import extract_and_save_routes
+
+                routes_output = os.path.join(project_findings_dir, "routes.json")
+                count = extract_and_save_routes(actual_target or ".", routes_output)
+                print(f"🗺️  Extracted {count} routes to: {routes_output}")
+            except Exception as err:
+                print(f"⚠️  Route extraction failed: {err}")
+
+        # Link Semgrep sinks to handlers/routes if requested
+        reachability_engine_completed = False
+        if args.run_reachability_engine:
+            semgrep_output = os.path.join(project_findings_dir, "semgrep.json")
+            engine_output = os.path.join(project_findings_dir, "sink_handler_reachability.json")
+            if not os.path.exists(semgrep_output):
+                print("⚠️  Reachability engine skipped: semgrep.json not found. Run with --run-sast.")
+            else:
+                try:
+                    results = run_reachability_engine(actual_target or ".", project_findings_dir)
+                    print(f"🧭 Reachability engine linked {len(results)} findings; saved to: {engine_output}")
+                    reachability_engine_completed = True
+                except Exception as err:
+                    print(f"⚠️  Reachability engine failed: {err}")
+
         # Run exploitability analysis if requested (both traditional and AI workflows)
         exploitability_completed = False
         if (args.run_exploitability or args.llm_fix) and vulnerabilities:

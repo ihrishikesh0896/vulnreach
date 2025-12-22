@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create New Scan - VulnReach Security</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Fixed Top Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="home">
+                <i class="material-icons me-2 text-primary">security</i>
+                <span class="fw-bold">VulnReach</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">
+                            <i class="material-icons align-middle">notifications</i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">
+                            <i class="material-icons align-middle">settings</i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">
+                            <i class="material-icons align-middle">account_circle</i>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay d-none" aria-live="polite">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Starting scan...</span>
+        </div>
+        <p class="mt-3">Initializing security scan...</p>
+    </div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" role="navigation" aria-label="Main navigation">
+        <div class="sidebar-sticky">
+
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="home">
+                        <i class="material-icons">dashboard</i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="findings">
+                        <i class="material-icons">bug_report</i>
+                        <span>Findings</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="create-scan" aria-current="page">
+                        <i class="material-icons">add_circle</i>
+                        <span>Create Scan</span>
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Sidebar Footer -->
+            <div class="sidebar-footer">
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" title="Documentation">
+                            <i class="material-icons">book</i>
+                            <span>Documentation</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" title="Profile">
+                            <i class="material-icons">account_circle</i>
+                            <span>Profile</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="main-content py-4">
+        <div class="container">
+            <!-- Page Header -->
+            <div class="row mb-4">
+                <div class="col">
+                    <h1 class="h3 mb-2">Create New Security Scan</h1>
+                    <p class="text-muted">Configure and launch a new vulnerability scan for your project</p>
+                </div>
+            </div>
+
+            <!-- Scan Configuration Form -->
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-4">
+                            <form id="scanForm">
+
+                                <!-- Source Code -->
+                                <div class="mb-4">
+                                    <h5 class="card-title mb-3 fw-semibold">
+                                        <i class="material-icons align-middle me-2" style="font-size: 20px;">code</i>
+                                        Source Code
+                                    </h5>
+                                    <div class="mb-3">
+                                        <label for="repositoryUrl" class="form-label fw-medium">Repository URL</label>
+                                        <input type="url" class="form-control" id="repositoryUrl" placeholder="https://github.com/username/repository">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="branch" class="form-label fw-medium">Branch</label>
+                                        <input type="text" class="form-control" id="branch" value="main">
+                                    </div>
+                                </div>
+
+                                <!-- Scan Configuration -->
+                                <div class="mb-4">
+                                    <h5 class="card-title mb-3 fw-semibold">
+                                        <i class="material-icons align-middle me-2" style="font-size: 20px;">settings</i>
+                                        Scan Configuration
+                                    </h5>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="vulnerabilityScan" checked>
+                                                <label class="form-check-label" for="vulnerabilityScan">
+                                                    Vulnerability Scan
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="secretsScan" checked>
+                                                <label class="form-check-label" for="secretsScan">
+                                                    Secrets Detection
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="dependencyScan" checked>
+                                                <label class="form-check-label" for="dependencyScan">
+                                                    Dependency Analysis
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="reachabilityAnalysis" checked>
+                                                <label class="form-check-label" for="reachabilityAnalysis">
+                                                    Reachability Analysis
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Advanced Options -->
+                                <div class="mb-4">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <h5 class="card-title mb-0 fw-semibold">
+                                            <i class="material-icons align-middle me-2" style="font-size: 20px;">tune</i>
+                                            Advanced Options
+                                        </h5>
+                                        <button type="button" class="btn btn-sm btn-link ms-auto p-0 text-decoration-none" data-bs-toggle="collapse" data-bs-target="#advancedOptions">
+                                            <i class="material-icons align-middle">expand_more</i>
+                                        </button>
+                                    </div>
+                                    <div class="collapse" id="advancedOptions">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <label for="scanDepth" class="form-label fw-medium">Scan Depth</label>
+                                                <select class="form-select" id="scanDepth">
+                                                    <option value="quick">Quick Scan</option>
+                                                    <option value="standard" selected>Standard Scan</option>
+                                                    <option value="deep">Deep Scan</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="excludePatterns" class="form-label fw-medium">Exclude Patterns</label>
+                                                <input type="text" class="form-control" id="excludePatterns" placeholder="e.g., test/*, vendor/*">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Form Actions -->
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="submit" class="btn btn-primary px-4">
+                                        <i class="material-icons align-middle me-1" style="font-size: 18px;">play_arrow</i>
+                                        Start Scan
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Section -->
+                <div class="col-lg-4">
+                    <div class="card border-0 shadow-sm bg-light">
+                        <div class="card-body p-4">
+                            <h5 class="card-title mb-3 fw-semibold">
+                                <i class="material-icons align-middle me-2 text-primary">help_outline</i>
+                                Quick Help
+                            </h5>
+                            <p class="card-text mb-3">Configure your security scan settings here. The scan will analyze your project for:</p>
+                            <ul class="mb-0 ps-3">
+                                <li class="mb-2">
+                                    <i class="material-icons align-middle me-1 text-success" style="font-size: 16px;">check_circle</i>
+                                    Known vulnerabilities in dependencies
+                                </li>
+                                <li class="mb-2">
+                                    <i class="material-icons align-middle me-1 text-success" style="font-size: 16px;">check_circle</i>
+                                    Security issues in source code
+                                </li>
+                                <li class="mb-2">
+                                    <i class="material-icons align-middle me-1 text-success" style="font-size: 16px;">check_circle</i>
+                                    Exposed secrets and credentials
+                                </li>
+                                <li class="mb-0">
+                                    <i class="material-icons align-middle me-1 text-success" style="font-size: 16px;">check_circle</i>
+                                    Reachability of vulnerable code
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer mt-5 py-4 bg-light border-top">
+        <div class="container text-center">
+            <div class="mt-2">
+                <small class="text-muted">VulnReach Security Dashboard &copy; 2025</small>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="sidebar.js"></script>
+    <!-- Custom Scripts -->
+    <script src="create-scan.js"></script>
+</body>
+</html>
