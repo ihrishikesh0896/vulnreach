@@ -99,25 +99,20 @@ A reviewer noted:
 #### Implementation Plan (Future Enhancement)
 
 **Phase 1: Replace Regex with ast-grep** (Medium Priority)
-- Install ast-grep as optional dependency
-- Create unified `ast_based_analyzer.py` module
-- Support pattern queries like:
-  ```yaml
-  # Example: Find all SQL query constructions
-  pattern: execute($SQL, ...)
-  language: python
-  ```
+- ✅ Install ast-grep as optional dependency
+- ✅ Create unified `ast_based_analyzer.py` module (ast_analyzer.py)
+- ✅ Support pattern queries for function calls, imports, class usage
 - Migrate language-specific analyzers to use ast-grep
 - Fallback to current regex approach if ast-grep unavailable
 
 **Phase 2: Agent-Based Workflow** (Lower Priority)
-- Integrate agentic framework (LangChain, AutoGPT, or custom)
-- Create specialized agents:
-  - **Code Scanner Agent**: Uses ast-grep to find vulnerable patterns
-  - **Reachability Agent**: Traces call paths from entry points to sinks
-  - **Remediation Agent**: Proposes fixes, validates them via ast-grep queries
-  - **Validation Agent**: Ensures fixes don't break functionality
-- Implement tool-use loop: Agent → ast-grep → LLM → ast-grep → ...
+- ✅ Create specialized agents:
+  - ✅ **AST Agent** (ast_agent.py): Uses ast-grep to find vulnerable patterns
+  - ✅ **Dependency Agent** (dependency_agent.py): Analyzes dependency trees (pip, npm)
+  - ✅ **Vulnerability Agent** (vulnerability_agent.py): Queries OSV/CVE databases
+  - **Reachability Agent**: Orchestrates reachability analysis (TODO)
+  - **Remediation Agent**: Proposes fixes, validates them via ast-grep queries (TODO)
+- Implement coordinator/orchestrator for agent communication (TODO)
 - Add agent reasoning logs to reports
 
 **Phase 3: Performance & Scale** (Future)
