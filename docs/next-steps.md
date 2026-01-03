@@ -149,3 +149,60 @@ A reviewer noted:
 - Is V1 limited to Python Flask/FastAPI (Spring Boot later)?
 - Preferred location for new reports (extend `security_findings/<project>/` or subfolders)?
 - Is HTML output required in V1 or is JSON + CLI summary sufficient?
+
+
+## Agent-Based Implementation Status (2026-01-03)
+
+### ✅ COMPLETED
+
+1. **AST Foundation** (ast_analyzer.py)
+   - ASTAnalyzer class using ast-grep
+   - VulnerabilityTracer for reachability checks
+   - Pattern search, import detection, call chain tracing
+
+2. **Agent System** (4 agents)
+   - AST Agent: Code structure analysis
+   - Dependency Agent: Dependency tree (pip, npm)
+   - Vulnerability Agent: OSV/CVE queries
+   - Reachability Agent: Orchestrator
+
+3. **Agent Coordinator** (coordinator.py)
+   - Central hub managing all agents
+   - Unified API: analyze_project(), analyze_package(), analyze_cve()
+   - Report export (JSON, Markdown)
+
+4. **CLI Integration**
+   - --agent-mode for full project analysis
+   - --analyze-package for single package
+   - --analyze-cve for CVE-specific analysis
+   - Color-coded output, auto-reports
+
+### 🎯 WORKING EXAMPLES
+
+```bash
+# Full project analysis
+vulnreach . --agent-mode
+
+# Analyze specific package
+vulnreach . --analyze-package requests
+
+# Analyze CVE with custom entry points
+vulnreach . --analyze-cve CVE-2023-12345 --package-name requests --entry-points 'app.route,main'
+```
+
+### 📊 WHAT IT DOES
+
+1. Scans all dependencies (pipdeptree)
+2. Queries OSV for vulnerabilities
+3. Uses ast-grep to find imports/function calls
+4. Traces reachability from entry points
+5. Scores confidence (high/medium/low)
+6. Generates JSON + Markdown reports
+
+### 🚀 NEXT PRIORITIES
+
+1. Entry Point Auto-Detection (Flask routes, FastAPI, etc)
+2. Integration Tests
+3. Enhanced CVE→function mapping
+4. Multi-language expansion (JavaScript, Java)
+
