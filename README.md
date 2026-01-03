@@ -27,32 +27,46 @@ Traditional vulnerability scanners overwhelm you with alerts, but VulnReach answ
 
 ## 🚀 Features
 
+### 🤖 **Agent-Based Reachability Analysis** *(NEW - Recommended)*
+- **ast-grep Foundation**: Fast, accurate AST-based code analysis across languages
+- **Call Chain Tracing**: Traces execution paths from entry points to vulnerable functions
+- **Confidence Scoring**: High/Medium/Low confidence levels for reachability assessment
+- **4 Specialized Agents**:
+  - **AST Agent**: Code structure analysis via ast-grep
+  - **Dependency Agent**: Dependency tree analysis (pip, npm)
+  - **Vulnerability Agent**: OSV/CVE database queries
+  - **Reachability Agent**: Orchestrates full vulnerability analysis
+- **Git Repository Support**: Analyze remote repos directly with auto-cleanup
+- **Fast & Lightweight**: No SBOM generation overhead
+- **Precise Results**: Know exactly which vulnerabilities can reach your code
+
 ### 🔍 **Smart Vulnerability Discovery**
 - **SBOM Generation**: Uses [Syft](https://github.com/anchore/syft) to create comprehensive Software Bill of Materials
 - **Vulnerability Scanning**: Leverages [Trivy](https://aquasecurity.github.io/trivy/) for industry-leading vulnerability detection
 - **Multi-format Support**: SPDX, CycloneDX, and Syft native formats
 - **Performance Tracking**: Detailed scan duration timing and metrics
 
-### 🌐 **Git Repository Support** *(NEW)*
+### 🌐 **Git Repository Support**
 - **Remote Repository Analysis**: Scan repositories directly from URLs without manual cloning
 - **Multi-Platform Support**: GitHub, GitLab, Bitbucket, and custom git servers
 - **SSH & HTTPS**: Supports both authentication methods
 - **Automatic Cleanup**: Temporary clones are automatically cleaned up after analysis
 - **Smart Naming**: Automatically extracts repository names for organized reporting
 
-### 🧠 **Intelligent Reachability Analysis**
-- **Multi-Language Support**: Python and Java projects with automatic language detection
-- **Static Code Analysis**: Parses your entire codebase using AST analysis (Python) or regex patterns (Java)
+### 🧠 **Traditional Reachability Analysis**
+- **Multi-Language Support**: Python, Java, JavaScript, Go, C#, PHP with automatic language detection
+- **Static Code Analysis**: Parses your entire codebase using AST analysis (Python) or regex patterns (others)
 - **Usage Pattern Detection**: Identifies imports, function calls, method calls, and instantiations
-- **Dynamic Package Mapping**: Handles complex import-to-package mappings (e.g., `import yaml` → `PyYAML`, `org.apache.commons` → `commons-lang3`)
+- **Dynamic Package Mapping**: Handles complex import-to-package mappings (e.g., `import yaml` → `PyYAML`)
+- **Transitive Dependency Tracking**: Maps dependency relationships
 
-### 💥 **Exploitability Analysis** *(NEW)*
+### 💥 **Exploitability Analysis**
 - **Public Exploit Detection**: Checks for publicly available exploits using SearchSploit
 - **CVE Intelligence**: Enhanced vulnerability context and exploit availability
 - **Risk Amplification**: Identifies vulnerabilities with known exploits in the wild
 - **Prioritization Support**: Helps focus on vulnerabilities with active exploitation
 
-### 🤖 **AI-Powered Analysis** *(LATEST)*
+### 🤖 **AI-Powered Analysis**
 - **Intelligent Recommendations**: AI-powered vulnerability analysis and remediation guidance
 - **Smart Prioritization**: Machine learning-based risk assessment and fix suggestions
 - **Auto Configuration**: Automatic setup with `--init-config` for first-time users
@@ -67,16 +81,27 @@ Traditional vulnerability scanners overwhelm you with alerts, but VulnReach answ
 
 ### 📈 **Comprehensive Reporting**
 - **Executive Summary**: High-level risk overview with timing metrics
-- **Detailed Analysis**: File-by-file usage contexts
+- **Detailed Analysis**: File-by-file usage contexts with call chains
 - **Exploitability Reports**: Public exploit availability and context
 - **Remediation Guidance**: Version upgrade recommendations
-- **JSON Output**: Machine-readable for CI/CD integration
+- **JSON + Markdown**: Multiple output formats for different use cases
 - **Organized Output**: Structured reporting in `security_findings/project_name/` directories
 
 ## 📋 Prerequisites
 
-Install the required security tools:
+### Required Tools
 
+**For Agent-Based Analysis (Recommended):**
+```bash
+# Install ast-grep
+brew install ast-grep  # macOS
+# OR
+cargo install ast-grep  # via Rust
+# OR
+npm install -g @ast-grep/cli  # via npm
+```
+
+**For Traditional Analysis:**
 ```bash
 # Install Syft (SBOM generation)
 curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
@@ -129,66 +154,96 @@ pip install -e ".[dev]"
 
 ## 🚀 Quick Start
 
-### Basic Vulnerability Scan
+### 🤖 Agent-Based Analysis (Recommended)
+
+**Fast, precise reachability analysis with call chain tracing:**
+
 ```bash
-# Scan your local project directory
+# Full project analysis with agent system
+vulnreach . --agent-mode
+
+# Analyze remote git repository
+vulnreach https://github.com/user/repo.git --agent-mode
+
+# Analyze specific package
+vulnreach . --analyze-package requests
+
+# Analyze specific CVE
+vulnreach . --analyze-cve CVE-2023-12345 --package-name urllib3
+
+# Custom entry points
+vulnreach . --agent-mode --entry-points "app.route,api.handler,main"
+
+# Multi-language support
+vulnreach . --agent-mode --language python --ecosystem PyPI
+```
+
+**Output:**
+- 🟢 Risk Level: LOW/MEDIUM/HIGH/CRITICAL
+- 📊 Reachable Vulnerabilities: X of Y total
+- ✅ High Confidence Findings
+- 📝 JSON + Markdown reports in `security_findings/`
+
+---
+
+### 🔍 Traditional SBOM-Based Analysis
+
+**Comprehensive SBOM generation + vulnerability scanning:**
+
+```bash
+# Basic vulnerability scan
 vulnreach /path/to/your/project
 
 # Scan remote git repository
 vulnreach https://github.com/user/repo.git
 
-# Scan GitHub repository (auto-detects .git)
-vulnreach https://github.com/user/vulnerable-app
-
-# Generate comprehensive report
-vulnreach /path/to/your/project --output-report security_report.json
-
-# Alternative command (for local installs)
-vulnreach-scan /path/to/your/project
-```
-
-### With Reachability Analysis (Recommended)
-```bash
-# Full analysis with multi-language reachability insights
+# With reachability analysis
 vulnreach /path/to/your/project --run-reachability
 
-# Analyze remote repository with reachability
-vulnreach https://github.com/user/repo.git --run-reachability
-
-# Supports Python and Java projects automatically
-# Python: Analyzes .py files using AST parsing
-# Java: Analyzes .java files using regex patterns
-```
-
-### With Exploitability Analysis *(NEW)*
-```bash
-# Check for public exploits using SearchSploit
+# With exploitability analysis
 vulnreach /path/to/your/project --run-exploitability
 
-# Full security analysis (recommended)
+# Full traditional analysis (recommended)
 vulnreach https://github.com/user/repo.git --run-reachability --run-exploitability
-
-# Complete analysis with all features
-vulnreach /path/to/project --run-reachability --run-exploitability --output-report full_report.json
 ```
 
-### With AI-Powered Analysis *(LATEST)*
+---
+
+### 🤖 AI-Powered Analysis
+
 ```bash
 # First time setup - creates config file
-vulnreach /path/to/your/project --llm-fix
-
-# Setup AI configuration manually
 vulnreach --init-config
 
-# AI-powered vulnerability analysis (after config setup)
+# AI-powered vulnerability analysis
 vulnreach /path/to/your/project --llm-fix
 
-# Remote repository with AI analysis
-vulnreach https://github.com/user/repo.git --llm-fix
-
-# Note: Edit ~/.vulnreach/config/creds.yaml to add your AI provider API keys
+# Note: Edit ~/.vulnreach/config/creds.yaml to add AI provider API keys
 # Supports: OpenAI, Anthropic, Google, Cohere, Groq, and more
 ```
+
+---
+
+### 📊 Comparison: Agent vs Traditional
+
+| Feature | Agent-Based (`--agent-mode`) | Traditional (`--run-reachability`) |
+|---------|------------------------------|-----------------------------------|
+| **Speed** | ⚡ Fast (no SBOM) | 🐢 Slower (SBOM + scan) |
+| **Accuracy** | 🎯 High (ast-grep) | 📊 Medium (regex for most langs) |
+| **Reachability** | 🔗 Call chain tracing | 📥 Import detection only |
+| **Confidence** | ✅ Scored (high/med/low) | ❌ Binary (used/not used) |
+| **Languages** | 🐍 Python (expanding) | 🌐 Python, Java, JS, Go, C#, PHP |
+| **SBOM** | ❌ Not generated | ✅ Full SBOM compliance |
+| **Exploits** | ❌ Not yet | ✅ SearchSploit integration |
+
+**Recommendation:** Use both for comprehensive coverage!
+
+```bash
+vulnreach . --run-reachability --run-exploitability  # Traditional
+vulnreach . --agent-mode                              # Agent-based
+```
+
+---
 
 ### Advanced Usage
 ```bash
