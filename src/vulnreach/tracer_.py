@@ -1033,6 +1033,134 @@ def run_ai_workflow(vulnerabilities: List[Vulnerability], components: List[Compo
             print(f"❌ Fallback analysis also failed: {fallback_error}")
 
 
+def run_agent_mode(args):
+    """
+    Run agent-based reachability analysis
+    """
+    import json
+    from vulnreach.agents import AgentCoordinator
+    
+    print("🤖 Agent-Based Reachability Analysis")
+    print("=" * 70)
+    
+    # Determine target directory
+    target = args.target if args.target else os.getcwd()
+    
+    # Parse entry points
+    entry_points = None
+    if args.entry_points:
+        entry_points = [ep.strip() for ep in args.entry_points.split(',')]
+    
+    # Initialize coordinator
+    coordinator = AgentCoordinator(target)
+    
+    result = None
+    
+    # Mode 1: Analyze specific package
+    if args.analyze_package:
+        print(f"\n📦 Analyzing package: {args.analyze_package}")
+        result = coordinator.analyze_package(
+            package_name=args.analyze_package,
+            entry_points=entry_points,
+            language=args.language,
+            ecosystem=args.ecosystem
+        )
+    
+    # Mode 2: Analyze specific CVE
+    elif args.analyze_cve:
+        if not args.package_name:
+            print("❌ Error: --analyze-cve requires --package-name")
+            sys.exit(1)
+        
+        print(f"\n🔍 Analyzing CVE: {args.analyze_cve}")
+        result = coordinator.analyze_cve(
+            cve_id=args.analyze_cve,
+            package_name=args.package_name,
+            entry_points=entry_points,
+            language=args.language
+        )
+    
+    # Mode 3: Full project analysis
+    else:
+        print(f"\n🔍 Full project analysis")
+        print(f"Target: {target}")
+        result = coordinator.analyze_project(
+            entry_points=entry_points,
+            language=args.language,
+            ecosystem=args.ecosystem
+        )
+    
+    # Display results
+    if result:
+        print("\n" + "=" * 70)
+        print("📊 ANALYSIS RESULTS")
+        print("=" * 70)
+        
+        if 'error' in result:
+            print(f"\n❌ Error: {result['error']}")
+        else:
+            # Print summary
+            print(f"\n📋 Summary:")
+            print(f"  Package Manager: {result.get('package_manager', 'N/A')}")
+            print(f"  Dependencies Checked: {result.get('dependencies_checked', 0)}")
+            print(f"  Total Vulnerabilities: {result.get('total_vulnerabilities', 0)}")
+            print(f"  Reachable Vulnerabilities: {result.get('reachable_vulnerabilities', 0)}")
+            print(f"  High Confidence: {result.get('high_confidence_reachable', 0)}")
+            
+            summary = result.get('summary', {})
+            risk_level = summary.get('risk_level', 'unknown').upper()
+            
+            # Color coding for risk level
+            risk_emoji = {
+                'CRITICAL': '🔴',
+                'HIGH': '🟠',
+                'MEDIUM': '🟡',
+                'LOW': '🟢',
+                'NONE': '✅'
+            }
+            
+            print(f"\n{risk_emoji.get(risk_level, '⚪')} Risk Level: {risk_level}")
+            print(f"\n💡 Recommendation:")
+            print(f"  {summary.get('recommendation', 'N/A')}")
+            
+            # Print findings if any
+            findings = result.get('findings', [])
+            if findings:
+                print(f"\n📝 Detailed Findings ({len(findings)} total):")
+                for i, finding in enumerate(findings[:5], 1):  # Show first 5
+                    vuln_id = finding.get('vulnerability_id', 'UNKNOWN')
+                    pkg = finding.get('package', 'N/A')
+                    reachable = '✅' if finding.get('reachable') else '❌'
+                    confidence = finding.get('confidence', 'N/A')
+                    
+                    print(f"\n  {i}. {vuln_id}")
+                    print(f"     Package: {pkg}")
+                    print(f"     Reachable: {reachable} (Confidence: {confidence})")
+                    print(f"     Reason: {finding.get('reason', 'N/A')}")
+                
+                if len(findings) > 5:
+                    print(f"\n  ... and {len(findings) - 5} more findings")
+        
+        # Export report
+        project_name = get_project_name(target)
+        findings_dir = create_security_findings_dir(project_name)
+        
+        report_path = os.path.join(findings_dir, 'agent_reachability_report.json')
+        with open(report_path, 'w') as f:
+            json.dump(result, f, indent=2)
+        
+        print(f"\n💾 Full report saved to: {report_path}")
+        
+        # Also generate markdown report
+        md_path = os.path.join(findings_dir, 'agent_reachability_report.md')
+        coordinator.export_report(result, md_path, format='markdown')
+        print(f"💾 Markdown report saved to: {md_path}")
+        
+        print("\n" + "=" * 70)
+    
+    return 0
+
+
 def main():
     start_time = time.time()
     parser = argparse.ArgumentParser(
@@ -1090,8 +1218,28 @@ Examples:
                         help='Create default configuration file at ~/.vulnreach/config/creds.yaml')
     parser.add_argument('--llm-fix', action='store_true',
                         help='Use AI-powered workflow for vulnerability analysis and recommendations')
+    
+    # Agent-based analysis flags
+    parser.add_argument('--agent-mode', action='store_true',
+                        help='Use agent-based reachability analysis (ast-grep foundation)')
+    parser.add_argument('--analyze-package', metavar='PACKAGE',
+                        help='Analyze specific package for reachability (requires --agent-mode)')
+    parser.add_argument('--analyze-cve', metavar='CVE_ID',
+                        help='Analyze specific CVE for reachability (requires --agent-mode and --package-name)')
+    parser.add_argument('--package-name', metavar='NAME',
+                        help='Package name for CVE analysis')
+    parser.add_argument('--entry-points', metavar='POINTS',
+                        help='Comma-separated entry points (e.g., "app.route,main")')
+    parser.add_argument('--language', default='python',
+                        help='Programming language (default: python)')
+    parser.add_argument('--ecosystem', default='PyPI',
+                        help='Package ecosystem (default: PyPI)')
 
     args = parser.parse_args()
+
+    # Handle agent-based analysis modes
+    if args.agent_mode or args.analyze_package or args.analyze_cve:
+        return run_agent_mode(args)
 
     # Handle config initialization
     if args.init_config:

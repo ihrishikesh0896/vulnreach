@@ -41,15 +41,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-agents = [
-    "langchain>=0.1.0",
-    "langchain-community>=0.0.10",
-]
-ast-grep = [
-    "ast-grep-py>=0.5.0",
-]
-
-[project.optional-dependencies]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
@@ -61,6 +52,14 @@ web = [
     "gunicorn>=20.0.0"]
 
 export = ["jinja2>=3.0.0"]
+
+agents = [
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.10",
+]
+ast-grep = [
+    "ast-grep-py>=0.5.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/ihrishikesh0896/vulnreach"
