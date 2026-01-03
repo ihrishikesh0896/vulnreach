@@ -108,7 +108,7 @@ class ReachabilityAgent:
         # Step 4: Compute summary statistics
         total_vulns = sum(v['vulnerability_count'] for v in vuln_results.values())
         reachable_vulns = sum(1 for f in reachability_findings if f['reachable'])
-        high_confidence = sum(1 for f in reachability_findings if f['confidence'] == 'high')
+        high_confidence = sum(1 for f in reachability_findings if f['reachable'] and f['confidence'] == 'high')
         
         return {
             'task': 'analyze_project',
@@ -190,7 +190,7 @@ class ReachabilityAgent:
             findings.append(finding)
         
         reachable_count = sum(1 for f in findings if f['reachable'])
-        high_conf_count = sum(1 for f in findings if f['confidence'] == 'high')
+        high_conf_count = sum(1 for f in findings if f['reachable'] and f['confidence'] == 'high')
         
         return {
             'task': 'analyze_package',
