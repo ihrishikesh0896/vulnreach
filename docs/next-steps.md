@@ -45,6 +45,110 @@
 - Safety: static parsing only (AST/regex), no code execution; skip env/.venv/tests/security_findings/build/.git.
 - CLI: new flag `--run-routes` to emit `routes.json`; can be run alongside reachability to feed sink→handler mapping later.
 
+## Community Feedback & Advanced Enhancements
+
+### Feedback Received (2026-01-03)
+A reviewer noted:
+> "What's your approach to code parsing across all languages you support? And also i see you're using ai for auto remediate. It might be worthwhile to use agents with something like ast-grep to quickly scan codebases."
+
+### Current State vs. Suggestions
+
+#### Code Parsing Approach (Current Implementation)
+- **Python**: Uses Python's built-in `ast` module for AST-based parsing (in `python_reachability_analyzer.py`)
+  - Handles imports, function calls, method calls, attribute access
+  - Full AST traversal for accurate detection
+- **Java**: Regex-based pattern matching (in `java_reachability_analyzer.py`)
+  - Matches import statements, method calls, instantiations
+  - No formal parser/AST used
+- **JavaScript/Node.js**: Regex-based pattern matching (in `javascript_reachability_analyzer.py`)
+  - Basic require/import detection
+  - No formal parser/AST used
+- **Other Languages** (Go, PHP, C#): Similar regex-based approaches
+
+**Limitation**: Regex patterns can miss complex code structures (nested calls, dynamic imports, multi-line statements)
+
+#### AI Auto-Remediation (Current Implementation)
+- **LLM Integration**: Active AI analysis via `ai_analyzer.py`
+  - Uses LLM providers (Ollama, OpenAI, Anthropic, etc.)
+  - Generates remediation recommendations, risk assessments, priority scores
+  - Provides short-term and long-term action plans
+- **Approach**: Single-pass LLM calls with structured prompts
+- **Not Agent-Based**: No iterative reasoning, tool usage, or multi-step workflows
+
+### Proposed Enhancement: Agent-Based AST Scanning
+
+#### Why ast-grep or Similar Tools?
+1. **Language-Agnostic Parsing**: ast-grep supports multiple languages via tree-sitter
+   - Python, JavaScript, Java, Go, Rust, PHP, C#, etc.
+   - Consistent query syntax across all languages
+   
+2. **Faster & More Accurate**: 
+   - Native parsers (tree-sitter) are more reliable than regex
+   - Pattern-based queries are faster for large codebases
+   - Can handle complex nested structures
+
+3. **Agent-Based Scanning**:
+   - Instead of single LLM call → use agentic workflow
+   - Agent can iteratively:
+     1. Query codebase with ast-grep
+     2. Analyze findings
+     3. Request more context
+     4. Propose targeted fixes
+     5. Validate changes
+
+#### Implementation Plan (Future Enhancement)
+
+**Phase 1: Replace Regex with ast-grep** (Medium Priority)
+- Install ast-grep as optional dependency
+- Create unified `ast_based_analyzer.py` module
+- Support pattern queries like:
+  ```yaml
+  # Example: Find all SQL query constructions
+  pattern: execute($SQL, ...)
+  language: python
+  ```
+- Migrate language-specific analyzers to use ast-grep
+- Fallback to current regex approach if ast-grep unavailable
+
+**Phase 2: Agent-Based Workflow** (Lower Priority)
+- Integrate agentic framework (LangChain, AutoGPT, or custom)
+- Create specialized agents:
+  - **Code Scanner Agent**: Uses ast-grep to find vulnerable patterns
+  - **Reachability Agent**: Traces call paths from entry points to sinks
+  - **Remediation Agent**: Proposes fixes, validates them via ast-grep queries
+  - **Validation Agent**: Ensures fixes don't break functionality
+- Implement tool-use loop: Agent → ast-grep → LLM → ast-grep → ...
+- Add agent reasoning logs to reports
+
+**Phase 3: Performance & Scale** (Future)
+- Cache ast-grep parse trees for large repos
+- Parallel agent execution for independent vulnerabilities
+- Incremental scanning (only changed files)
+
+#### Benefits
+- **Accuracy**: Eliminate regex false positives/negatives
+- **Speed**: ast-grep is faster than full AST traversal in Python
+- **Multi-Language**: Single parsing approach for all languages
+- **Smarter AI**: Agents can iteratively refine analysis vs. single-shot prompts
+- **Maintainability**: Reduce language-specific code duplication
+
+#### Effort Estimate
+- **ast-grep Integration**: 2-3 weeks (one language at a time)
+- **Agent Framework**: 3-4 weeks (design, implement, test)
+- **Full Migration**: 8-12 weeks (all languages + testing)
+
+#### Decision Point
+- **Keep Current**: Good enough for V1 (Python AST + regex for others)
+- **Add ast-grep**: Significant accuracy/speed improvement, worth investment
+- **Add Agents**: Advanced feature, best after core functionality is stable
+
+### Recommendation
+1. **V1 (Current)**: Ship with current approach (AST for Python, regex for others)
+2. **V1.5 (Next 3 months)**: Add ast-grep support for Java/JavaScript
+3. **V2.0 (6-12 months)**: Implement agent-based scanning with ast-grep as foundation
+
+---
+
 ## Questions to Confirm
 - Is V1 limited to Python Flask/FastAPI (Spring Boot later)?
 - Preferred location for new reports (extend `security_findings/<project>/` or subfolders)?
