@@ -53,12 +53,23 @@ class ASTAnalyzer:
         
         try:
             result = subprocess.run(cmd, capture_output=True, 
-                                  text=True, check=True)
-            return json.loads(result.stdout) if result.stdout else []
-        except subprocess.CalledProcessError as e:
-            print(f"ast-grep error: {e.stderr}")
-            return []
-        except json.JSONDecodeError:
+                                  text=True, check=False)  # Don't raise on non-zero exit
+            
+            # ast-grep returns exit code 1 when no matches found (not an error)
+            if result.returncode == 0 or result.returncode == 1:
+                if result.stdout:
+                    try:
+                        return json.loads(result.stdout)
+                    except json.JSONDecodeError:
+                        return []
+                return []
+            else:
+                # Real error (exit code > 1)
+                if result.stderr:
+                    print(f"ast-grep error: {result.stderr}")
+                return []
+        except Exception as e:
+            print(f"ast-grep exception: {e}")
             return []
     
     def find_function_calls(self, function_name: str, 
