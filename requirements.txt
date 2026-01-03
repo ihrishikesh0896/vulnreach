@@ -21,3 +21,10 @@ six
 tzdata
 urllib3
 pipdeptree
+# Agent framework dependencies (optional)
+langchain>=0.1.0
+langchain-community>=0.0.10
+
+# ast-grep Python bindings (optional)
+# Note: ast-grep CLI tool also needs to be installed separately
+# Installation: cargo install ast-grep OR npm install -g @ast-grep/cli

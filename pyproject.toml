@@ -41,6 +41,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+agents = [
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.10",
+]
+ast-grep = [
+    "ast-grep-py>=0.5.0",
+]
+
+[project.optional-dependencies]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
