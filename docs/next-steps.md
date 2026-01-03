@@ -105,15 +105,16 @@ A reviewer noted:
 - Migrate language-specific analyzers to use ast-grep
 - Fallback to current regex approach if ast-grep unavailable
 
-**Phase 2: Agent-Based Workflow** (Lower Priority)
+**Phase 2: Agent-Based Workflow** ✅ COMPLETED
 - ✅ Create specialized agents:
   - ✅ **AST Agent** (ast_agent.py): Uses ast-grep to find vulnerable patterns
   - ✅ **Dependency Agent** (dependency_agent.py): Analyzes dependency trees (pip, npm)
   - ✅ **Vulnerability Agent** (vulnerability_agent.py): Queries OSV/CVE databases
-  - **Reachability Agent**: Orchestrates reachability analysis (TODO)
-  - **Remediation Agent**: Proposes fixes, validates them via ast-grep queries (TODO)
-- Implement coordinator/orchestrator for agent communication (TODO)
-- Add agent reasoning logs to reports
+  - ✅ **Reachability Agent** (reachability_agent.py): Orchestrates reachability analysis
+  - **Remediation Agent**: Proposes fixes, validates them via ast-grep queries (FUTURE)
+- ✅ Implement coordinator/orchestrator for agent communication (coordinator.py)
+- ✅ Add demo script (examples/agent_demo.py)
+- Add agent reasoning logs to reports (TODO)
 
 **Phase 3: Performance & Scale** (Future)
 - Cache ast-grep parse trees for large repos
