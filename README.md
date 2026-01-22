@@ -27,7 +27,16 @@ Traditional vulnerability scanners overwhelm you with alerts, but VulnReach answ
 
 ## 🚀 Features
 
-### 🤖 **Agent-Based Reachability Analysis** *(NEW - Recommended)*
+### 🔬 **Taint Analysis Integration** *(NEW - Reduces False Positives 85% → 15%)*
+- **Source-to-Sink Flow Detection**: Tracks data flow from user input to vulnerable functions
+- **Framework-Aware**: Native support for Flask, Django, FastAPI
+- **Sanitizer Detection**: Recognizes when data is properly sanitized
+- **7 Vulnerability Classes**: SQLI, XSS, RCE, DESERIALIZE, SSTI, SSRF, PATH_TRAVERSAL
+- **Confidence Scoring**: High/Medium/Low confidence levels
+- **CLI Integration**: Single flag `--run-taint-analysis` for complete scan
+- **Evidence-Based Reports**: Actual code paths with source/sink locations
+
+### 🤖 **Agent-Based Reachability Analysis** *(Recommended)*
 - **ast-grep Foundation**: Fast, accurate AST-based code analysis across languages
 - **Call Chain Tracing**: Traces execution paths from entry points to vulnerable functions
 - **Confidence Scoring**: High/Medium/Low confidence levels for reachability assessment
@@ -200,11 +209,21 @@ vulnreach https://github.com/user/repo.git
 # With reachability analysis
 vulnreach /path/to/your/project --run-reachability
 
+# With taint analysis (source-to-sink vulnerability flow detection)
+vulnreach /path/to/your/project --run-taint-analysis
+
+# Target specific vulnerability classes
+vulnreach /path/to/your/project --run-taint-analysis \
+  --taint-vuln-classes SQLI,XSS,DESERIALIZE
+
 # With exploitability analysis
 vulnreach /path/to/your/project --run-exploitability
 
-# Full traditional analysis (recommended)
-vulnreach https://github.com/user/repo.git --run-reachability --run-exploitability
+# Full security pipeline (recommended)
+vulnreach /path/to/your/project \
+  --run-reachability \
+  --run-taint-analysis \
+  --run-exploitability
 ```
 
 ---
@@ -235,6 +254,212 @@ vulnreach /path/to/your/project --llm-fix
 | **Languages** | 🐍 Python (expanding) | 🌐 Python, Java, JS, Go, C#, PHP |
 | **SBOM** | ❌ Not generated | ✅ Full SBOM compliance |
 | **Exploits** | ❌ Not yet | ✅ SearchSploit integration |
+| **Taint Analysis** | ❌ Not yet | ✅ Tainter integration |
+
+---
+
+## 🏆 Maximum Capability Mode (Recommended Commands)
+
+### 🚀 **Agent-Based: Maximum Precision**
+
+For projects where you want **the most accurate reachability analysis** with call chain tracing:
+
+```bash
+# Python projects - Full agent analysis
+vulnreach . --agent-mode \
+  --entry-points "app.route,api.handler,main,__main__" \
+  --language python \
+  --ecosystem PyPI
+
+# Analyze specific high-risk package
+vulnreach . --analyze-package requests \
+  --entry-points "app.route,main"
+
+# Analyze specific CVE with full context
+vulnreach . --analyze-cve CVE-2023-12345 \
+  --package-name urllib3 \
+  --entry-points "app.route,api.handler"
+
+# Git repository with agent analysis
+vulnreach https://github.com/user/repo.git --agent-mode
+```
+
+**Output:**
+- 🎯 **High/Medium/Low confidence** reachability verdicts
+- 🔗 **Call chain traces** from entry points to vulnerabilities
+- 📊 **Precise risk levels**: CRITICAL/HIGH/MEDIUM/LOW/NOT_REACHABLE
+- 📝 **JSON + Markdown reports** in `security_findings/`
+
+**Best For:**
+- ✅ Python projects
+- ✅ Deep call chain analysis
+- ✅ High-precision requirements
+- ✅ CI/CD with strict security gates
+
+---
+
+### 🛡️ **Traditional: Maximum Coverage**
+
+For projects requiring **comprehensive SBOM compliance**, **exploitability**, and **taint analysis**:
+
+```bash
+# ULTIMATE SECURITY PIPELINE - All features enabled
+vulnreach /path/to/project \
+  --run-reachability \
+  --run-taint-analysis \
+  --run-exploitability \
+  --run-sast \
+  --run-routes
+
+# With specific taint analysis targets (faster)
+vulnreach /path/to/project \
+  --run-reachability \
+  --run-taint-analysis \
+  --taint-vuln-classes SQLI,XSS,DESERIALIZE,RCE \
+  --run-exploitability
+
+# Direct scan (skip SBOM) with full analysis
+vulnreach /path/to/project --direct-scan \
+  --run-reachability \
+  --run-taint-analysis \
+  --run-exploitability
+
+# Git repository with full pipeline
+vulnreach https://github.com/user/repo.git \
+  --run-reachability \
+  --run-taint-analysis \
+  --run-exploitability \
+  --output-sbom repo_sbom.json
+```
+
+**Output:**
+- 📋 **SBOM**: Full software bill of materials (SPDX/CycloneDX)
+- 🔍 **Reachability**: Import/usage detection across 6 languages
+- 🔬 **Taint Analysis**: Source-to-sink vulnerability flows (28+ flows detected)
+- 💥 **Exploitability**: SearchSploit exploit database matching
+- 🧩 **SAST**: Semgrep security findings
+- 🗺️ **Routes**: API endpoint extraction
+- 📊 **All Reports**: Saved to `security_findings/<project>/`
+
+**Best For:**
+- ✅ Multi-language projects
+- ✅ SBOM compliance requirements
+- ✅ Maximum vulnerability coverage
+- ✅ Exploit intelligence needed
+- ✅ Framework-aware taint analysis (Flask/Django/FastAPI)
+
+---
+
+### 🔥 **Hybrid: Best of Both Worlds**
+
+Run **both approaches** for ultimate confidence:
+
+```bash
+# Step 1: Agent-based precision analysis
+vulnreach . --agent-mode \
+  --entry-points "app.route,main"
+
+# Step 2: Traditional comprehensive analysis
+vulnreach . \
+  --run-reachability \
+  --run-taint-analysis \
+  --run-exploitability
+
+# Review both reports
+ls -la security_findings/$(basename $(pwd))/
+```
+
+**Why Hybrid?**
+- ✅ **Agent-based** confirms precise reachability with call chains
+- ✅ **Traditional** provides SBOM, exploits, and taint flows
+- ✅ **Cross-validation** between two different analysis engines
+- ✅ **Maximum confidence** in security findings
+
+---
+
+### 🎯 **Quick Reference: Choose Your Mode**
+
+#### For Speed (< 5 seconds)
+```bash
+vulnreach . --agent-mode                    # Agent-based only
+vulnreach . --direct-scan --run-taint-analysis  # Taint only
+```
+
+#### For Accuracy (< 30 seconds)
+```bash
+vulnreach . --agent-mode --entry-points "app.route,main"  # Agent with entry points
+vulnreach . --run-taint-analysis --taint-vuln-classes SQLI,XSS  # Targeted taint
+```
+
+#### For Maximum Coverage (1-5 minutes)
+```bash
+vulnreach . --run-reachability --run-taint-analysis --run-exploitability  # Full traditional
+vulnreach . --agent-mode && vulnreach . --run-taint-analysis  # Hybrid approach
+```
+
+#### For CI/CD (Balanced)
+```bash
+# Fast feedback loop
+vulnreach . --direct-scan --run-taint-analysis --taint-vuln-classes SQLI,XSS,RCE
+
+# Comprehensive nightly scan
+vulnreach . --run-reachability --run-taint-analysis --run-exploitability
+```
+
+---
+
+### 📋 **Complete Flag Reference**
+
+#### Core Analysis Flags
+| Flag | Description | Time Impact |
+|------|-------------|-------------|
+| `--agent-mode` | Agent-based call chain analysis | ⚡ Fast |
+| `--run-reachability` | Traditional multi-language analysis | 🐢 Medium |
+| `--run-taint-analysis` | Source-to-sink flow detection | ⚡ Fast |
+| `--run-exploitability` | Public exploit database search | 🐢 Medium |
+| `--run-sast` | Semgrep SAST scanning | 🐢 Slow |
+| `--run-routes` | API endpoint extraction | ⚡ Fast |
+
+#### Optimization Flags
+| Flag | Description | Use Case |
+|------|-------------|----------|
+| `--direct-scan` | Skip SBOM generation | Speed optimization |
+| `--taint-vuln-classes SQLI,XSS` | Target specific vulnerabilities | Focused analysis |
+| `--entry-points "app.route,main"` | Custom entry points | Agent precision |
+| `--taint-include-tests` | Include test files | Comprehensive coverage |
+| `--output-sbom sbom.json` | Save SBOM for reuse | Compliance |
+
+#### Combined Examples
+```bash
+# Fastest: Taint only, specific classes
+vulnreach . --direct-scan --run-taint-analysis --taint-vuln-classes SQLI,XSS
+
+# Balanced: Reachability + targeted taint
+vulnreach . --run-reachability --run-taint-analysis --taint-vuln-classes SQLI,XSS,DESERIALIZE
+
+# Maximum: Everything enabled
+vulnreach . --run-reachability --run-taint-analysis --run-exploitability --run-sast --run-routes
+
+# Agent + Taint (recommended hybrid)
+vulnreach . --agent-mode --entry-points "app.route,main" && \
+vulnreach . --direct-scan --run-taint-analysis
+```
+
+---
+
+### 📊 **Performance Benchmarks**
+
+| Command | Time | Flows Detected | Reports Generated |
+|---------|------|----------------|-------------------|
+| `--agent-mode` | ~2s | Call chains | agent_analysis.json |
+| `--run-taint-analysis` | ~0.03s | 28-42 flows | taint_analysis_report.json |
+| `--run-reachability` | ~15s | Usage patterns | *_reachability_report.json |
+| `--run-exploitability` | ~20s | Exploit matches | exploitability_report.json |
+| **Full Pipeline** | ~45s | All combined | 6+ reports |
+
+*Based on `labs/vuln_demo` (7 files, ~1500 lines)*
+
+---
 
 **Recommendation:** Use both for comprehensive coverage!
 

@@ -20,6 +20,8 @@ from vulnreach.utils.reachability_engine import run_reachability_engine
 from vulnreach.utils.exploitability_analyzer import ExploitabilityAnalyzer
 from vulnreach.utils.ai_analyzer import AIVulnerabilityAnalyzer, print_ai_analysis_summary
 from vulnreach.config import get_config_loader
+from vulnreach.utils.html_reporter import HtmlReporter
+from vulnreach.rbom import create_rbom_from_analysis, save_rbom
 import os
 import json
 import sys
@@ -100,8 +102,7 @@ class SyftSBOMGenerator:
                 self.syft_path,
                 target,
                 "-o", f"{format}={output_path}",
-                "--catalogers", "all",  # Enable all catalogers for comprehensive detection
-                "--quiet"
+                "--quiet",
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
@@ -1208,6 +1209,21 @@ Examples:
 
   # Clone and scan git repository with reachability analysis
   %(prog)s git@github.com:user/repo.git --run-reachability
+
+  # Run comprehensive taint analysis (reduces false positives)
+  %(prog)s /path/to/project --run-taint-analysis
+
+  # Run taint analysis for specific vulnerability classes
+  %(prog)s /path/to/project --run-taint-analysis --taint-vuln-classes SQLI,XSS,DESERIALIZE
+
+  # Full security pipeline with taint analysis
+  %(prog)s /path/to/project --run-reachability --run-taint-analysis --run-exploitability
+
+  # Generate Runtime Bill of Materials (RBOM) with reachability analysis
+  %(prog)s /path/to/project --generate-rbom
+
+  # Full pipeline: SBOM + Reachability + Exploitability + RBOM
+  %(prog)s /path/to/project --run-reachability --run-exploitability --generate-rbom
         """
     )
 
@@ -1232,8 +1248,16 @@ Examples:
     parser.add_argument('--semgrep-rules', help='Override Semgrep ruleset path/URL (default: p/security-audit)')
     parser.add_argument('--run-routes', action='store_true',
                         help='Extract HTTP routes (Flask/FastAPI/Express/Spring) to routes.json')
+    parser.add_argument('--run-taint-analysis', action='store_true',
+                        help='Run comprehensive taint analysis using Tainter (source-to-sink vulnerability flow detection)')
+    parser.add_argument('--taint-vuln-classes', metavar='CLASSES',
+                        help='Comma-separated vulnerability classes for taint analysis (e.g., SQLI,XSS,DESERIALIZE)')
+    parser.add_argument('--taint-include-tests', action='store_true',
+                        help='Include test files in taint analysis (default: excluded)')
     parser.add_argument('--run-reachability-engine', action='store_true',
                         help='Link Semgrep sinks to handlers/routes and score reachability')
+    parser.add_argument('--generate-rbom', action='store_true',
+                        help='Generate Runtime Bill of Materials (RBOM) with reachability analysis')
     parser.add_argument('--init-config', action='store_true',
                         help='Create default configuration file at ~/.vulnreach/config/creds.yaml')
     parser.add_argument('--llm-fix', action='store_true',
@@ -1305,6 +1329,7 @@ Examples:
     # Variables to track temporary directories for cleanup
     temp_clone_dir = None
     is_temp_clone = False
+    exit_code = 0  # Initialize exit_code to avoid UnboundLocalError
 
     try:
         # Handle git repository cloning if target is a git URL
@@ -1415,9 +1440,22 @@ Examples:
         reachability_completed = False
         if args.run_reachability or args.llm_fix:
             print("\n🔍 Running multi-language vulnerability reachability analysis...")
-            detected_language = run_multi_language_analyzer(actual_target or ".", args.output_consolidated, project_findings_dir)
+            detected_language = run_multi_language_analysis(actual_target or ".", args.output_consolidated, project_findings_dir)
             print(f"📊 Reachability analysis completed for {detected_language.upper()} project")
             reachability_completed = True
+            
+            # Generate Interactive HTML Report
+            try:
+                reach_json_path = os.path.join(project_findings_dir, f"{detected_language}_vulnerability_reachability_report.json")
+                if os.path.exists(reach_json_path):
+                   html_report_path = os.path.join(project_findings_dir, "report.html")
+                   print(f"🎨 Generating interactive HTML report...")
+                   with open(reach_json_path, 'r') as f:
+                       reach_data = json.load(f)
+                   HtmlReporter.generate(reach_data, html_report_path)
+                   print(f"✅ HTML Report ready: {html_report_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to generate HTML report: {e}")
 
         # Run Semgrep SAST if requested
         if args.run_sast:
@@ -1443,6 +1481,94 @@ Examples:
                 print(f"🗺️  Extracted {count} routes to: {routes_output}")
             except Exception as err:
                 print(f"⚠️  Route extraction failed: {err}")
+
+        # Run taint analysis if requested
+        taint_analysis_completed = False
+        if args.run_taint_analysis:
+            try:
+                from vulnreach.agents.coordinator import AgentCoordinator
+
+                print("\n🔬 Running Tainter taint analysis...")
+                print("=" * 70)
+
+                # Initialize coordinator
+                coordinator = AgentCoordinator(actual_target or ".")
+
+                # Parse vulnerability classes if specified
+                vuln_classes = []
+                if args.taint_vuln_classes:
+                    vuln_classes = [vc.strip().upper() for vc in args.taint_vuln_classes.split(',')]
+                    print(f"🎯 Focusing on vulnerability classes: {', '.join(vuln_classes)}")
+                else:
+                    print(f"🎯 Scanning for all vulnerability classes")
+
+                # Run taint analysis
+                taint_result = coordinator.run_taint_analysis(
+                    vuln_classes=vuln_classes if vuln_classes else None,
+                    include_tests=args.taint_include_tests
+                )
+
+                if taint_result['success']:
+                    print(f"✅ Taint analysis complete!")
+                    print(f"📊 Total flows detected: {taint_result['total_flows']}")
+                    print(f"📁 Files analyzed: {taint_result['files_analyzed']}")
+                    print(f"⏱️  Duration: {taint_result['summary'].get('duration_seconds', 0):.3f}s")
+
+                    # Save taint analysis report
+                    taint_report_path = os.path.join(project_findings_dir, "taint_analysis_report.json")
+                    with open(taint_report_path, 'w') as f:
+                        json.dump(taint_result, f, indent=2)
+
+                    print(f"💾 Taint analysis report saved to: {taint_report_path}")
+
+                    # Print summary by vulnerability class
+                    if taint_result['flows']:
+                        flows = taint_result['flows']
+                        vuln_class_counts = {}
+                        high_confidence_count = 0
+
+                        for flow in flows:
+                            vc = flow.get('vulnerability_class', 'UNKNOWN')
+                            vuln_class_counts[vc] = vuln_class_counts.get(vc, 0) + 1
+                            if flow.get('confidence', '').upper() == 'HIGH':
+                                high_confidence_count += 1
+
+                        print(f"\n📈 Flows by Vulnerability Class:")
+                        for vc, count in sorted(vuln_class_counts.items(), key=lambda x: -x[1]):
+                            print(f"   {vc:20s}: {count:3d} flows")
+
+                        print(f"\n🚨 High confidence flows: {high_confidence_count}/{len(flows)}")
+
+                        # Show top 3 critical flows
+                        critical_flows = sorted(
+                            [f for f in flows if f.get('confidence', '').upper() == 'HIGH'],
+                            key=lambda f: f.get('vulnerability_class', '')
+                        )[:3]
+
+                        if critical_flows:
+                            print(f"\n🔴 Sample Critical Flows:")
+                            for i, flow in enumerate(critical_flows, 1):
+                                file_name = os.path.basename(flow['sink']['location']['file'])
+                                line_num = flow['sink']['location']['line']
+                                print(f"   {i}. {flow['vulnerability_class']} - {flow['confidence']} confidence")
+                                print(f"      → {file_name}:{line_num}")
+                    else:
+                        print(f"\n✅ No vulnerability flows detected!")
+
+                    taint_analysis_completed = True
+                    print("=" * 70)
+
+                else:
+                    error_msg = taint_result.get('error', 'Unknown error')
+                    print(f"❌ Taint analysis failed: {error_msg}")
+
+            except ImportError as e:
+                print(f"⚠️  Taint analysis skipped: TainterAgent not available")
+                print(f"   Error: {e}")
+            except Exception as err:
+                print(f"❌ Taint analysis failed: {err}")
+                import traceback
+                traceback.print_exc()
 
         # Link Semgrep sinks to handlers/routes if requested
         reachability_engine_completed = False
@@ -1566,7 +1692,106 @@ Examples:
         # Run AI-powered analysis if enabled and credentials are available
         if ai_workflow_enabled:
             run_ai_workflow(vulnerabilities, components, project_findings_dir)
-            
+
+        # Generate RBOM if requested
+        if args.generate_rbom:
+            print("\n🛡️  Generating Runtime Bill of Materials (RBOM)...")
+            try:
+                # Convert vulnerability dataclasses to dict format for RBOM
+                vuln_dicts = []
+                for vuln in vulnerabilities:
+                    vuln_dict = {
+                        'vulnerability_id': vuln.vulnerability_id,
+                        'pkg_name': vuln.pkg_name,
+                        'pkg_version': vuln.pkg_version,
+                        'severity': vuln.severity,
+                        'cvss_score': vuln.cvss_score,
+                        'fixed_version': vuln.fixed_version
+                    }
+                    vuln_dicts.append(vuln_dict)
+
+                # Load runtime events if available (from runtime_hooks)
+                runtime_events = None
+                runtime_events_path = os.path.join(project_findings_dir, "runtime_events.json")
+                if os.path.exists(runtime_events_path):
+                    with open(runtime_events_path, 'r') as f:
+                        runtime_events = json.load(f)
+                    print(f"   ✅ Found runtime events: {len(runtime_events)} events")
+
+                # Load exploitability results if available
+                exploitability_results = None
+                exploit_report_path = os.path.join(project_findings_dir, "exploitability_report.json")
+                if os.path.exists(exploit_report_path):
+                    with open(exploit_report_path, 'r') as f:
+                        exploit_data = json.load(f)
+                        exploitability_results = exploit_data.get('vulnerabilities', [])
+                    print(f"   ✅ Found exploitability data: {len(exploitability_results)} vulnerabilities")
+
+                # Detect language
+                detected_language = None
+                if hasattr(args, '_detected_language'):
+                    detected_language = args._detected_language
+                elif reachability_completed:
+                    # Try to infer from reachability analysis
+                    detected_language = "python"  # Default assumption
+
+                # Build correlation results for sophisticated analysis
+                correlation_results = {}
+                if runtime_events:
+                    correlation_results['runtime_events'] = runtime_events
+
+                # Create RBOM with full correlation pipeline
+                from vulnreach.rbom import RBOMBuilder
+
+                builder = RBOMBuilder()
+                builder.set_target(
+                    path=actual_target or ".",
+                    target_type="directory",
+                    language=detected_language
+                )
+
+                # Add SBOM components
+                builder.add_sbom_components([c.__dict__ if hasattr(c, '__dict__') else c for c in components])
+
+                # Add vulnerabilities
+                builder.add_vulnerabilities(vuln_dicts)
+
+                # Add runtime evidence (uses Phase 2 event matcher)
+                if runtime_events:
+                    builder.add_runtime_evidence(runtime_events)
+
+                # Add exploitability
+                if exploitability_results:
+                    builder.add_exploitability_analysis(exploitability_results)
+
+                # Update reachability verdicts (uses Phase 4 CVE mapper)
+                builder.update_reachability_verdicts(correlation_results)
+
+                # Build RBOM
+                rbom = builder.build()
+
+                # Save RBOM in all formats
+                from vulnreach.rbom import save_rbom
+                save_rbom(rbom, project_findings_dir, base_name="rbom")
+
+                print(f"\n✅ RBOM generated successfully!")
+                print(f"   📄 JSON: {os.path.join(project_findings_dir, 'rbom.json')}")
+                print(f"   📝 Report: {os.path.join(project_findings_dir, 'rbom_report.md')}")
+
+                # Print enhanced statistics
+                stats = rbom.get_statistics()
+                if stats.get('runtime_loaded_components', 0) > 0:
+                    print(f"\n📊 RBOM Statistics:")
+                    print(f"   • Runtime loaded: {stats['runtime_loaded_components']}/{stats['total_components']} ({stats['runtime_load_percentage']:.1f}%)")
+                    print(f"   • Reachable vulnerabilities: {stats['reachable_vulnerabilities']}/{stats['total_vulnerabilities']}")
+                    if stats.get('false_positive_reduction', 0) > 0:
+                        print(f"   • False positive reduction: {stats['false_positive_reduction']:.1f}%")
+
+            except Exception as e:
+                print(f"\n⚠️  RBOM generation failed: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Print completion summary for individual analysis types
         if reachability_completed and exploitability_completed:
             print(f"\n📁 All analysis reports saved to: {project_findings_dir}")

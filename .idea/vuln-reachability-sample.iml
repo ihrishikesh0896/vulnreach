@@ -7,7 +7,7 @@
       <excludeFolder url="file://$MODULE_DIR$/.vuln" />
       <excludeFolder url="file://$MODULE_DIR$/env" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.9 (vuln-reachability-sample)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.11 (env)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

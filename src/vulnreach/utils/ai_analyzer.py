@@ -38,6 +38,9 @@ class AIAnalysisResult:
     short_term_actions: List[str] = field(default_factory=list)
     long_term_actions: List[str] = field(default_factory=list)
     risk_associated: Optional[str] = None
+    # Black Hat features:
+    exploit_scenario: Optional[str] = None
+    poc_suggestion: Optional[str] = None
 
 
 @dataclass
@@ -230,16 +233,20 @@ class AIVulnerabilityAnalyzer:
     def _build_prompt(self, packages_data: List[Dict[str, Any]]) -> str:
         """Build prompt for LLM from package vulnerability data"""
         prompt_header = (
-            "Analyze the following security vulnerability data (Python packages) and provide clear,\n"
-            "actionable Short-Term Fixes and Long-Term Fixes for the entire set of packages.\n"
-            "Focus on the recommended fixed versions and explain the urgency.\n\n"
+            "You are an offensive security expert. Analyze the following vulnerability data.\n"
+            "For each package, assume the role of an attacker: how would you exploit this?\n"
+            "Provide:\n"
+            "1. A realistic 'Exploit Scenario' (how a hacker triggers this via generic entry points).\n"
+            "2. A 'PoC Suggestion' (e.g., 'Sending a POST request with payload X...').\n"
+            "3. Actionable Short-Term and Long-Term fixes.\n\n"
         )
 
         prompt_footer = (
             "\n\nOutput format: valid JSON only. Top-level object with keys:\n"
             "  - short_term_fixes: array of {package, installed_version, recommended_fixed_version, reason, urgency}\n"
+            "  - exploit_analysis: array of {package, exploit_scenario, poc_suggestion}\n"
             "  - long_term_fixes: array of {package, recommendation, rationale}\n"
-            "  - summary: one-line summary of urgency and recommended next steps\n"
+            "  - summary: one-line summary of urgency from an attacker's perspective\n"
         )
 
         try:
@@ -277,6 +284,13 @@ class AIVulnerabilityAnalyzer:
                         "urgency": "HIGH"
                     }
                 ],
+                "exploit_analysis": [
+                    {
+                        "package": "flask",
+                        "exploit_scenario": "Attacker sends a crafted JSON payload to /login without Content-Type header.",
+                        "poc_suggestion": "curl -X POST /login -d @malicious.json"
+                    }
+                ],
                 "long_term_fixes": [
                     {
                         "package": "all",
@@ -284,7 +298,7 @@ class AIVulnerabilityAnalyzer:
                         "rationale": "Reduce upgrade churn and automate security updates"
                     }
                 ],
-                "summary": "Urgent: Patch critical packages immediately; schedule upgrades within next sprint"
+                "summary": "Urgent: Critical RCE vectors identified in public routes."
             }
             return json.dumps(sample)
 
@@ -299,7 +313,7 @@ class AIVulnerabilityAnalyzer:
         }
 
         logger.info(f"Calling LLM at {self.llm_url} with model={model}")
-        print(f"🔁 Attempting LLM call at {self.llm_url} using model={model}")
+        print(f"😈 Generating Attacker Perspective using {model}...")
 
         # Retry loop
         for attempt in range(self.retry_count + 1):

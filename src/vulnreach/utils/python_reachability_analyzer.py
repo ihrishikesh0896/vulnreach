@@ -23,6 +23,12 @@ except ImportError:
     HAS_DEP_TREE_ANALYZER = False
     print("Warning: dependency_tree_analyzer not available, transitive dependency detection disabled")
 
+try:
+    from .python_call_graph import PythonCallGraphBuilder
+    HAS_CALL_GRAPH = True
+except ImportError:
+    HAS_CALL_GRAPH = False
+
 
 class CriticalityLevel(Enum):
     CRITICAL = "CRITICAL"
@@ -38,6 +44,7 @@ class UsageContext:
     line_number: int
     context_line: str
     usage_type: str  # "import", "from_import", "function_call", "attribute_access"
+    enclosing_function: Optional[str] = None  # Function name where this usage occurs
 
 
 @dataclass
@@ -52,6 +59,7 @@ class VulnAnalysis:
     is_direct_dependency: bool = True  # True if directly declared, False if transitive
     dependency_depth: int = 0  # 0 for direct, 1+ for transitive
     required_by: List[str] = None  # List of parent packages (for transitive deps)
+    call_chain_graph: Optional[str] = None  # Mermaid graph definition of reachable paths
 
     def __post_init__(self):
         if self.required_by is None:
@@ -60,9 +68,30 @@ class VulnAnalysis:
 
 class PythonReachabilityAnalyzer:
     """Analyzer for Python project vulnerability reachability"""
+    
+    # Maximum number of files to scan (DoS prevention)
+    MAX_FILES_DEFAULT = 10000
 
-    def __init__(self, project_root: str):
-        self.project_root = Path(project_root)
+    def __init__(self, project_root: str, max_files: int = MAX_FILES_DEFAULT):
+        # Validate and resolve project root path
+        try:
+            root = Path(project_root).resolve(strict=True)
+        except (OSError, ValueError) as e:
+            raise ValueError(f"Invalid project_root path: {project_root}. Error: {e}")
+        
+        # Ensure project_root is a directory
+        if not root.is_dir():
+            raise ValueError(f"project_root must be a directory: {project_root}")
+        
+        # Security: Validate project_root is not a system directory
+        # Disallow scanning system-critical paths
+        forbidden_paths = ['/', '/etc', '/usr', '/var', '/bin', '/sbin', '/lib', '/lib64']
+        if str(root) in forbidden_paths or str(root).startswith('/etc/'):
+            raise ValueError(f"Scanning system directories is not allowed: {project_root}")
+        
+        self.project_root = root
+        self.max_files = max_files
+        self.files_scanned = 0
 
         # Initialize dependency tree analyzer for transitive dependency detection
         self.dep_tree_analyzer = None
@@ -71,22 +100,82 @@ class PythonReachabilityAnalyzer:
                 self.dep_tree_analyzer = PythonDependencyTreeAnalyzer(str(self.project_root))
             except Exception as e:
                 print(f"Warning: Could not initialize dependency tree analyzer: {e}")
+        
+        # Initialize Call Graph Builder
+        self.call_graph_builder = None
+        if HAS_CALL_GRAPH:
+            try:
+                print(f"🕸️  Building static call graph for {self.project_root}...")
+                self.call_graph_builder = PythonCallGraphBuilder(str(self.project_root))
+                self.call_graph_builder.build_graph()
+                print(f"   Graph built: {len(self.call_graph_builder.graph)} functions, {len(self.call_graph_builder.entry_points)} entry points")
+            except Exception as e:
+                print(f"Warning: Could not build call graph: {e}")
 
-    def find_python_files(self) -> List[Path]:
-        """Find all Python source files in the project."""
+    def find_python_files(self, max_files: Optional[int] = None) -> List[Path]:
+        """Find all Python source files in the project.
+        
+        Args:
+            max_files: Maximum number of files to return (default: self.max_files)
+                       Used to prevent resource exhaustion attacks.
+        
+        Returns:
+            List of Path objects to Python files.
+            
+        Raises:
+            ValueError: If too many files are found (exceeds max_files limit).
+        
+        Security:
+            - Symlinks are NOT followed (prevents path traversal)
+            - File count is limited (prevents DoS)
+            - Resolved paths are validated to be within project_root
+        """
+        if max_files is None:
+            max_files = self.max_files
+            
         python_files = []
+        file_count = 0
 
-        for root, dirs, files in os.walk(self.project_root):
+        # Security: followlinks=False prevents path traversal via symlinks
+        for root, dirs, files in os.walk(self.project_root, followlinks=False):
+            # Security: Validate that the current directory is still under project_root
+            # This prevents escaping via directory traversal tricks
+            try:
+                resolved_root = Path(root).resolve()
+                if not resolved_root.is_relative_to(self.project_root):
+                    # Skip directories that resolve outside project_root
+                    dirs[:] = []  # Don't descend into subdirectories
+                    continue
+            except (OSError, ValueError):
+                # Skip paths that can't be resolved
+                dirs[:] = []
+                continue
+            
             # Skip common non-code directories
             dirs[:] = [d for d in dirs if d not in {
-                '.git', '__pycache__', '.venv', 'venv', 'env', '.tox',
+                '.git', '__pycache__', '.venv', 'venv', 'env', '.env', '.tox',
                 'dist', 'build', '.eggs', '*.egg-info', '.pytest_cache',
                 '.mypy_cache', '.idea', '.vscode'
             }]
 
             for file in files:
                 if file.endswith('.py'):
-                    python_files.append(Path(root) / file)
+                    file_path = Path(root) / file
+                    
+                    # Security: Skip symlinked files
+                    if file_path.is_symlink():
+                        continue
+                    
+                    python_files.append(file_path)
+                    file_count += 1
+                    
+                    # Security: Enforce file count limit to prevent resource exhaustion
+                    if file_count > max_files:
+                        raise ValueError(
+                            f"Too many Python files found (>{max_files}). "
+                            f"This limit exists to prevent resource exhaustion. "
+                            f"Use max_files parameter to increase if needed."
+                        )
 
         return python_files
 
@@ -111,78 +200,67 @@ class PythonReachabilityAnalyzer:
         # Track imported modules and their aliases
         imported_modules = {}  # module_name -> alias or None
 
-        for node in ast.walk(tree):
-            relative_path = str(file_path.relative_to(self.project_root))
+        class UsageVisitor(ast.NodeVisitor):
+            def __init__(self, outer):
+                self.outer = outer
+                self.scope_stack = []  # Stack of function names
 
-            # Import statements: import requests
-            if isinstance(node, ast.Import):
+            def visit_FunctionDef(self, node):
+                self.scope_stack.append(node.name)
+                self.generic_visit(node)
+                self.scope_stack.pop()
+
+            def visit_AsyncFunctionDef(self, node):
+                self.scope_stack.append(node.name)
+                self.generic_visit(node)
+                self.scope_stack.pop()
+
+            def _get_current_scope(self):
+                return self.scope_stack[-1] if self.scope_stack else None
+
+            def _add_usage(self, root_pkg, line_num, usage_type):
+                if root_pkg not in usage_map:
+                    usage_map[root_pkg] = []
+                
+                context_line = lines[line_num - 1] if line_num <= len(lines) else ""
+                
+                usage_map[root_pkg].append(UsageContext(
+                    file_path=str(file_path.relative_to(self.outer.project_root)),
+                    line_number=line_num,
+                    context_line=context_line.strip(),
+                    usage_type=usage_type,
+                    enclosing_function=self._get_current_scope()
+                ))
+
+            def visit_Import(self, node):
                 for alias in node.names:
                     module_name = alias.name
                     module_alias = alias.asname if alias.asname else alias.name
                     imported_modules[module_alias] = module_name
-
-                    # Get the line content
-                    line_num = node.lineno
-                    context_line = lines[line_num - 1] if line_num <= len(lines) else ""
-
+                    
                     root_package = module_name.split('.')[0]
-                    if root_package not in usage_map:
-                        usage_map[root_package] = []
+                    self._add_usage(root_package, node.lineno, "import")
 
-                    usage_map[root_package].append(UsageContext(
-                        file_path=relative_path,
-                        line_number=line_num,
-                        context_line=context_line.strip(),
-                        usage_type="import"
-                    ))
-
-            # From imports: from flask import Flask
-            elif isinstance(node, ast.ImportFrom):
+            def visit_ImportFrom(self, node):
                 if node.module:
                     module_name = node.module
                     root_package = module_name.split('.')[0]
-
-                    # Track imported names
+                    
                     for alias in node.names:
                         imported_name = alias.name
                         imported_alias = alias.asname if alias.asname else alias.name
                         imported_modules[imported_alias] = module_name
+                    
+                    self._add_usage(root_package, node.lineno, "from_import")
 
-                    # Get the line content
-                    line_num = node.lineno
-                    context_line = lines[line_num - 1] if line_num <= len(lines) else ""
-
-                    if root_package not in usage_map:
-                        usage_map[root_package] = []
-
-                    usage_map[root_package].append(UsageContext(
-                        file_path=relative_path,
-                        line_number=line_num,
-                        context_line=context_line.strip(),
-                        usage_type="from_import"
-                    ))
-
-            # Function calls: requests.get(), Flask()
-            elif isinstance(node, ast.Call):
-                line_num = node.lineno
-                context_line = lines[line_num - 1] if line_num <= len(lines) else ""
-
+            def visit_Call(self, node):
                 # Direct function call: Flask()
                 if isinstance(node.func, ast.Name):
                     func_name = node.func.id
                     if func_name in imported_modules:
                         original_module = imported_modules[func_name]
                         root_package = original_module.split('.')[0]
-
-                        if root_package not in usage_map:
-                            usage_map[root_package] = []
-
-                        usage_map[root_package].append(UsageContext(
-                            file_path=relative_path,
-                            line_number=line_num,
-                            context_line=context_line.strip(),
-                            usage_type="function_call"
-                        ))
+                        self._add_usage(root_package, node.lineno, "function_call")
 
                 # Attribute call: requests.get()
                 elif isinstance(node.func, ast.Attribute):
@@ -191,37 +269,20 @@ class PythonReachabilityAnalyzer:
                         if module_name in imported_modules:
                             original_module = imported_modules[module_name]
                             root_package = original_module.split('.')[0]
+                            self._add_usage(root_package, node.lineno, "function_call")
+                
+                self.generic_visit(node)
 
-                            if root_package not in usage_map:
-                                usage_map[root_package] = []
-
-                            usage_map[root_package].append(UsageContext(
-                                file_path=relative_path,
-                                line_number=line_num,
-                                context_line=context_line.strip(),
-                                usage_type="function_call"
-                            ))
-
-            # Attribute access: app.config
-            elif isinstance(node, ast.Attribute):
+            def visit_Attribute(self, node):
                 if isinstance(node.value, ast.Name):
                     var_name = node.value.id
                     if var_name in imported_modules:
-                        line_num = node.lineno
-                        context_line = lines[line_num - 1] if line_num <= len(lines) else ""
-
                         original_module = imported_modules[var_name]
                         root_package = original_module.split('.')[0]
+                        self._add_usage(root_package, node.lineno, "attribute_access")
+                self.generic_visit(node)
 
-                        if root_package not in usage_map:
-                            usage_map[root_package] = []
-
-                        usage_map[root_package].append(UsageContext(
-                            file_path=relative_path,
-                            line_number=line_num,
-                            context_line=context_line.strip(),
-                            usage_type="attribute_access"
-                        ))
+        UsageVisitor(self).visit(tree)
 
         return usage_map
 
@@ -408,6 +469,29 @@ class PythonReachabilityAnalyzer:
             if not is_direct and depth > 0:
                 risk_reason += f" [TRANSITIVE: depth={depth}, required by {len(required_by)} package(s)]"
 
+            # Generate Call Graph if available
+            call_graph_mermaid = None
+            if self.call_graph_builder and usage_contexts:
+                # Get unique enclosing functions from usage
+                target_funcs = {ctx.enclosing_function for ctx in usage_contexts if ctx.enclosing_function}
+                
+                if target_funcs:
+                    try:
+                        traces = self.call_graph_builder.find_trace_to_usage(list(target_funcs))
+                        if traces:
+                            call_graph_mermaid = self.call_graph_builder.get_mermaid_graph(traces)
+                            path_count = len(traces)
+                            print(f"      🕸️  Call Graph: Found {path_count} execution paths from entry points!")
+                            
+                            # If we found a trace from an entry point (e.g. route) to the usage, this is high confidence
+                            risk_reason += f" [VERIFIED: {path_count} call paths from entry points]"
+                            
+                            # Upgrade validation confidence
+                            if criticality == CriticalityLevel.HIGH or criticality == CriticalityLevel.MEDIUM:
+                                criticality = CriticalityLevel.CRITICAL
+                    except Exception as e:
+                        print(f"      Warning: Error tracing call graph: {e}")
+
             analysis = VulnAnalysis(
                 package_name=package_name,
                 installed_version=installed_version,
@@ -418,7 +502,8 @@ class PythonReachabilityAnalyzer:
                 risk_reason=risk_reason,
                 is_direct_dependency=is_direct,
                 dependency_depth=depth,
-                required_by=required_by
+                required_by=required_by,
+                call_chain_graph=call_graph_mermaid
             )
 
             analyses.append(analysis)
@@ -468,6 +553,7 @@ class PythonReachabilityAnalyzer:
                     "depth": analysis.dependency_depth,
                     "required_by": analysis.required_by if analysis.required_by else []
                 },
+                "call_chain_graph": analysis.call_chain_graph,
                 "usage_details": {
                     "total_usages": len(analysis.usage_contexts),
                     "files_affected": len(set(ctx.file_path for ctx in analysis.usage_contexts)),

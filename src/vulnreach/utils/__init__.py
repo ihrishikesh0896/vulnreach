@@ -33,4 +33,7 @@ __all__ = [
     'python_reachability_analyzer',
     'csharp_reachability_analyzer',
     'php_reachability_analyzer',
+    'python_call_graph',
+    'javascript_call_graph',
+    'java_call_graph'
 ]

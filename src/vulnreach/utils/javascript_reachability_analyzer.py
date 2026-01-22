@@ -15,6 +15,13 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 
 
+try:
+    from .javascript_call_graph import JavaScriptCallGraphBuilder
+    HAS_CALL_GRAPH = True
+except ImportError:
+    HAS_CALL_GRAPH = False
+
+
 class CriticalityLevel(Enum):
     CRITICAL = "CRITICAL"
     HIGH = "HIGH"
@@ -29,6 +36,7 @@ class UsageContext:
     line_number: int
     context_line: str
     usage_type: str  # "import", "require", "dynamic_import"
+    enclosing_function: str = None  # Function where usage occurs
 
 
 @dataclass
@@ -40,6 +48,7 @@ class VulnAnalysis:
     usage_contexts: List[UsageContext]
     criticality: CriticalityLevel
     risk_reason: str
+    call_chain_graph: str = None  # Mermaid graph definition
 
 
 class JavaScriptReachabilityAnalyzer:
@@ -55,6 +64,17 @@ class JavaScriptReachabilityAnalyzer:
             # Dynamic imports
             re.compile(r'import\(["\']([^"\']+)["\']\)'),
         ]
+        
+        # Initialize Call Graph Builder
+        self.call_graph_builder = None
+        if HAS_CALL_GRAPH:
+            try:
+                print(f"🕸️  Building static call graph for {self.project_root}...")
+                self.call_graph_builder = JavaScriptCallGraphBuilder(str(self.project_root))
+                self.call_graph_builder.build_graph()
+                print(f"   Graph built: {len(self.call_graph_builder.graph)} functions, {len(self.call_graph_builder.entry_points)} entry points")
+            except Exception as e:
+                print(f"Warning: Could not build call graph: {e}")
 
     def find_js_files(self) -> List[Path]:
         """Find all JavaScript/TypeScript source files in the project."""
@@ -106,8 +126,41 @@ class JavaScriptReachabilityAnalyzer:
         for js_file in js_files:
             try:
                 with open(js_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    for line_num, line in enumerate(f, 1):
-                        # Check each import pattern
+                    content = f.read()
+                    lines = content.splitlines()
+                    
+                    # Track function scope manually (simple heuristic)
+                    current_function = None
+                    brace_balance = 0
+                    scope_stack = [] # (name, push_level)
+                    
+                    # Function definition regex (reused from Call Graph Builder for consistency)
+                    func_regex = re.compile(r'(?:function\s+([a-zA-Z0-9_$]+)\s*\(|(?:const|let|var)\s+([a-zA-Z0-9_$]+)\s*=\s*(?:function\s*\(|\(?.*?\)?\s*=>))')
+
+                    for line_num, line in enumerate(lines, 1):
+                        line_stripped = line.strip()
+                        
+                        # Brace tracking
+                        # Note: This is brittle but sufficient for "enclosing function" heuristic
+                        brace_balance += line.count('{')
+                        brace_balance -= line.count('}')
+                        
+                        # Check function entry
+                        match = func_regex.search(line)
+                        if match:
+                            func_name = match.group(1) or match.group(2)
+                            if func_name:
+                                scope_stack.append({'name': func_name, 'level': brace_balance})
+                                current_function = func_name
+                                
+                        # Check function exit
+                        if scope_stack:
+                            # If brace balance drops below definition level
+                            if brace_balance < scope_stack[-1]['level']:
+                                scope_stack.pop()
+                                current_function = scope_stack[-1]['name'] if scope_stack else None
+
+                        # Check imports/usage
                         for pattern in self.import_patterns:
                             match = pattern.search(line)
                             if match:
@@ -123,7 +176,8 @@ class JavaScriptReachabilityAnalyzer:
                                         file_path=str(js_file.relative_to(self.project_root)),
                                         line_number=line_num,
                                         context_line=line.strip(),
-                                        usage_type=usage_type
+                                        usage_type=usage_type,
+                                        enclosing_function=current_function
                                     ))
                                     break
             except Exception as e:
@@ -180,6 +234,21 @@ class JavaScriptReachabilityAnalyzer:
 
             risk_reason = f"Package actively imported in {len(usage_contexts)} location(s)"
 
+        # Generate Call Graph Trace
+        call_graph_mermaid = None
+        if self.call_graph_builder and is_used:
+            target_funcs = {ctx.enclosing_function for ctx in usage_contexts if ctx.enclosing_function}
+            if target_funcs:
+                traces = self.call_graph_builder.find_trace_to_usage(list(target_funcs))
+                if traces:
+                    call_graph_mermaid = self.call_graph_builder.get_mermaid_graph(traces)
+                    path_count = len(traces)
+                    risk_reason += f" [VERIFIED: {path_count} paths from routes]"
+                    
+                    # Risk uplift
+                    if criticality == CriticalityLevel.HIGH or criticality == CriticalityLevel.MEDIUM:
+                        criticality = CriticalityLevel.CRITICAL
+
         return VulnAnalysis(
             package_name=package_name,
             installed_version=installed_version,
@@ -187,7 +256,8 @@ class JavaScriptReachabilityAnalyzer:
             is_used=is_used,
             usage_contexts=usage_contexts,
             criticality=criticality,
-            risk_reason=risk_reason
+            risk_reason=risk_reason,
+            call_chain_graph=call_graph_mermaid
         )
 
 
@@ -242,8 +312,9 @@ def run_javascript_reachability_analysis(project_root: str, consolidated_path: s
         "not_reachable_vulnerabilities": sum(1 for a in analyses if not a.is_used),
         "analyses": [
             {
-                **{k: v for k, v in asdict(a).items() if k != 'usage_contexts'},
+                **{k: v for k, v in asdict(a).items() if k not in {'usage_contexts', 'call_chain_graph'}},
                 'criticality': a.criticality.value,
+                'call_chain_graph': a.call_chain_graph,
                 'usage_count': len(a.usage_contexts),
                 'usage_contexts': [asdict(uc) for uc in a.usage_contexts[:5]]  # Limit to 5 examples
             }

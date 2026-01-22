@@ -11,6 +11,7 @@ from .ast_agent import ASTAgent
 from .dependency_agent import DependencyAgent
 from .vulnerability_agent import VulnerabilityAgent
 from .reachability_agent import ReachabilityAgent
+from .tainter_agent import TainterAgent
 
 
 class AgentCoordinator:
@@ -27,7 +28,8 @@ class AgentCoordinator:
             'ast': ASTAgent(str(root_path)),
             'dependency': DependencyAgent(str(root_path)),
             'vulnerability': VulnerabilityAgent(),
-            'reachability': ReachabilityAgent(str(root_path))
+            'reachability': ReachabilityAgent(str(root_path)),
+            'tainter': TainterAgent(str(root_path))
         }
         
         self.analysis_history = []
@@ -180,6 +182,64 @@ class AgentCoordinator:
             }
         })
     
+    def run_taint_analysis(self, vuln_classes: Optional[List[str]] = None,
+                          include_tests: bool = False) -> Dict[str, Any]:
+        """
+        Run comprehensive taint analysis using tainter
+
+        Args:
+            vuln_classes: Optional list of vulnerability classes to scan for
+                         (e.g., ['SQLI', 'XSS', 'RCE'])
+            include_tests: Whether to include test files in analysis
+
+        Returns:
+            Taint analysis results with detected flows
+        """
+        return self.agents['tainter'].analyze({
+            'type': 'scan_project',
+            'params': {
+                'vuln_classes': vuln_classes or [],
+                'include_tests': include_tests
+            }
+        })
+
+    def check_cve_taint_reachability(self, cve_details: Dict[str, Any],
+                                    package_name: str,
+                                    vulnerable_functions: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Check if a CVE is reachable via taint flow analysis
+
+        Args:
+            cve_details: CVE information (must include cwe_id)
+            package_name: Package name containing vulnerability
+            vulnerable_functions: Optional list of vulnerable function names
+
+        Returns:
+            Reachability verdict with taint flow evidence
+        """
+        return self.agents['tainter'].analyze({
+            'type': 'check_cve_reachability',
+            'params': {
+                'cve_details': cve_details,
+                'package_name': package_name,
+                'vulnerable_functions': vulnerable_functions or []
+            }
+        })
+
+    def list_taint_sources(self) -> Dict[str, Any]:
+        """List all available taint sources (Flask, Django, FastAPI, etc.)"""
+        return self.agents['tainter'].analyze({
+            'type': 'list_sources',
+            'params': {}
+        })
+
+    def list_taint_sinks(self) -> Dict[str, Any]:
+        """List all available taint sinks (vulnerable functions)"""
+        return self.agents['tainter'].analyze({
+            'type': 'list_sinks',
+            'params': {}
+        })
+
     def export_report(self, analysis_result: Dict[str, Any],
                      output_path: Optional[str] = None,
                      format: str = 'json') -> str:

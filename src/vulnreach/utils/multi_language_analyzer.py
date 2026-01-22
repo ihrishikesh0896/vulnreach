@@ -105,7 +105,7 @@ class ProjectLanguageDetector:
         for root, dirs, files in os.walk(self.project_root):
             # Skip common non-code directories
             dirs[:] = [d for d in dirs if d not in {
-                '.git', '__pycache__', '.venv', 'venv', 'node_modules',
+                '.git', '__pycache__', '.venv', 'venv','.env', 'env' 'node_modules',
                 'target', 'build', '.gradle', '.idea', '.vscode', 'bin', 'out'
             }]
             

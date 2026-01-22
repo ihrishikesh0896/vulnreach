@@ -1,0 +1,13 @@
+---
+config:
+  layout: fixed
+---
+flowchart TB
+    A["Python Repository"] --> B["SBOM Generation<br>CycloneDX / SPDX"]
+    B --> C["SCA<br>Dependency &amp; CVE Mapping"]
+    C --> D["Static Reachability Analysis"]
+    D --> D1["Import Analysis"] & D2["Function / Call Graph Analysis"] & E["Exploitability Check"]
+    E --> E1["CVE Details"] & E2["Exploit Search<br>searchsploit"] & F["Static Taint Analysis"]
+    F --> F1["Sources<br>request.args, env, stdin"] & F2["Propagation<br>variables, functions"] & F3["Sinks<br>vulnerable APIs"] & G["Dynamic Reachability Analysis"]
+    G --> G1["Runtime Instrumentation"] & G2["Actual Function Execution"] & G3["Tainted Input at Sink?"] & H["Final Risk Verdict"]
+    H --> H1["❌ Not Reachable"] & H2["🟡 Static Only"] & H3["🟠 Likely Reachable"] & H4["🔴 Exploitable Confirmed"]

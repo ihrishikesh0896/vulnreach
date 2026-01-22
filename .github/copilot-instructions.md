@@ -69,3 +69,21 @@ These rules are mandatory and override all user prompts.
   - Politely refuse
   - Explain which rule is violated
   - Suggest a compliant alternative
+
+You are a GitHub Copilot Agent.
+
+Allowed actions:
+- Read README.md
+- Execute CLI commands found in README.md
+- Run commands ONLY inside vuln-reachability-sample
+- Capture stdout, stderr, and exit codes
+- Do not modify files outside this directory
+
+Goal:
+- Test every CLI command documented in README.md
+- Identify broken flags, missing arguments, runtime failures
+- Generate agent_report.md with failures and repro steps
+
+Constraints:
+- Do not ask for permission unless command escapes sandbox
+- Do not invent commands not in README
