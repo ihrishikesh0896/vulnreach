@@ -1,30 +1,32 @@
-# 🛡️ VulnReach - Python Vulnerability Reachability Analyzer
+# 🛡️ VulnReach - Vulnerability Reachability Analyzer
 
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
-> **Reduce false positives by 60%+**: Combines static taint analysis with runtime execution evidence to determine which Python vulnerabilities are actually reachable and exploitable.
+> **Reduce false positives by 60%+**: Combines static taint analysis with runtime execution evidence to determine which vulnerabilities are actually reachable and exploitable in your applications.
 
 ## 🎯 What VulnReach Does
 
-### Universal Capabilities (All Languages)
+### Core Features (All Languages)
 - **SBOM Generation** - Software Bill of Materials via Syft
 - **SCA Scanning** - Vulnerability detection via Trivy  
 - **CVE Enrichment** - Exploitability data via SearchSploit
 - **Multi-format Support** - SPDX, CycloneDX, Syft JSON
+- **RBOM Generation** - Runtime Bill of Materials with reachability data
 
-### Python-Only Advanced Analysis
-- **Static Taint Analysis** - Source-to-sink dataflow tracing (SQLI, XSS, RCE, etc.)
-- **Runtime Instrumentation** - Import hooks capture actual package usage
-- **Container Execution** - Docker-based dynamic analysis with hooks
-- **Correlation Engine** - Assigns confidence verdicts:
-  - `CONFIRMED` - Runtime + static evidence
+### Advanced Analysis (Python Focus)
+- **Static Taint Analysis** - Source-to-sink dataflow tracing for SQLI, XSS, RCE, Path Traversal, Deserialization, etc.
+- **Runtime Instrumentation** - Import hooks capture actual package usage during execution
+- **Container Execution** - Docker-based dynamic analysis with runtime hooks
+- **Correlation Engine** - Combines static and dynamic evidence with confidence verdicts:
+  - `CONFIRMED` - Runtime + static evidence (high confidence)
   - `LIKELY` - Package imported, sink not observed  
   - `POSSIBLE` - Static flow only
   - `NOT_OBSERVED` - No evidence (⚠️ may still be reachable under different conditions)
-- **RBOM Generation** - Runtime Bill of Materials
+- **SAST Integration** - Semgrep-based security pattern detection
+- **Route Discovery** - Automatic HTTP endpoint extraction
 
-**⚠️ Important**: Advanced reachability analysis is **Python-only**. Other languages get standard SBOM + SCA.
+**⚠️ Important**: Advanced reachability analysis is **Python-focused**. Other languages get standard SBOM + SCA scanning.
 
 ## 🚀 Installation
 
@@ -34,9 +36,15 @@
 curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 brew install trivy  # macOS, or see https://trivy.dev/
 
+# Optional: Semgrep (for SAST analysis)
+brew install semgrep  # macOS
+# or: pip install semgrep
+
 # Optional: Docker (for container-based dynamic analysis)
-# Optional: SearchSploit (for exploitability analysis)
-sudo apt install exploitdb  # Linux only
+# Install from https://docs.docker.com/get-docker/
+
+# Optional: SearchSploit (for exploitability analysis - Linux only)
+sudo apt install exploitdb
 ```
 
 ### Install VulnReach
@@ -48,27 +56,109 @@ pip install -e .
 
 ## 💻 Usage
 
-### Basic Python Analysis
+### Quick Start
 ```bash
-# Full pipeline: SBOM → SCA → Exploits → Static → Dynamic → Correlation
-python run_vulnreach.py /path/to/python-project
+# Basic scan - SBOM + SCA only
+python src/vulnreach/tracer_.py /path/to/project
 
-# Output: security_findings/<project_name>/complete_findings.json
+# Full pipeline with reachability analysis
+python src/vulnreach/tracer_.py /path/to/project --run-reachability
+
+# Add dynamic analysis for runtime evidence
+python src/vulnreach/tracer_.py /path/to/project \
+  --run-reachability \
+  --run-dynamic \
+  --entrypoint app.py
+
+# Complete analysis with all features
+python src/vulnreach/tracer_.py /path/to/project \
+  --run-reachability \
+  --run-dynamic \
+  --entrypoint app.py \
+  --run-exploitability \
+  --run-taint-analysis \
+  --generate-rbom
 ```
 
-### Customized Analysis
+### Advanced Options
 ```bash
-# Skip phases
-python run_vulnreach.py ./my-app --no-dynamic --no-exploits
+# Taint analysis with specific vulnerability classes
+python src/vulnreach/tracer_.py /path/to/project \
+  --run-taint-analysis \
+  --taint-vuln-classes SQLI,XSS,DESERIALIZE
+
+# SAST analysis with Semgrep
+python src/vulnreach/tracer_.py /path/to/project \
+  --run-sast \
+  --run-routes
 
 # Use existing SBOM
-python run_vulnreach.py ./my-app --sbom existing.json
+python src/vulnreach/tracer_.py \
+  --sbom existing_sbom.json \
+  --run-reachability
 
-# Container-based dynamic analysis (requires Docker + Dockerfile)
-python run_vulnreach.py ./my-app --use-container --docker-image my-app:latest
+# Scan git repository directly
+python src/vulnreach/tracer_.py https://github.com/user/repo.git \
+  --run-reachability
+```
+
+### Output Location
+```bash
+# All reports saved to:
+security_findings/<project_name>/
+```
+
+### CLI Reference
+
+**Core Options:**
+- `--run-reachability` - Multi-language reachability analysis
+- `--run-dynamic` - Dynamic analysis with runtime hooks
+- `--entrypoint PATH` - Application entry point (required for dynamic)
+- `--run-exploitability` - Check for public exploits via SearchSploit
+- `--generate-rbom` - Generate Runtime Bill of Materials
+
+**Static Analysis:**
+- `--run-taint-analysis` - Advanced taint analysis (source-to-sink flows)
+- `--taint-vuln-classes CLASSES` - Focus on specific classes (SQLI,XSS,RCE,etc.)
+- `--taint-include-tests` - Include test files in taint analysis
+- `--run-sast` - Run Semgrep SAST analysis
+- `--run-routes` - Extract HTTP routes (Flask/FastAPI/Django)
+
+**Input/Output:**
+- `--sbom FILE` - Use existing SBOM instead of generating
+- `--output-sbom FILE` - Save generated SBOM
+- `--output-report FILE` - Save security report
+- `--direct-scan` - Skip SBOM, scan directory directly
+
+**Advanced:**
+- `--no-correlation` - Disable static+dynamic correlation
+- `--run-reachability-engine` - Link Semgrep sinks to handlers
+
+**Examples:**
+```bash
+# Comprehensive Python analysis
+python src/vulnreach/tracer_.py ./myapp \
+  --run-reachability \
+  --run-taint-analysis \
+  --run-dynamic --entrypoint app.py \
+  --run-sast \
+  --run-exploitability \
+  --generate-rbom
+
+# Quick taint scan only
+python src/vulnreach/tracer_.py ./myapp \
+  --run-taint-analysis \
+  --taint-vuln-classes SQLI,XSS
+
+# Use existing SBOM
+python src/vulnreach/tracer_.py \
+  --sbom sbom.json \
+  --run-reachability
 ```
 
 ### Understanding Results
+
+**Complete Findings Report** (`security_findings/<project>/complete_findings.json`):
 ```json
 {
   "findings": [
@@ -78,18 +168,41 @@ python run_vulnreach.py ./my-app --use-container --docker-image my-app:latest
       "severity": "CRITICAL",
       "verdict": "CONFIRMED",
       "confidence": "HIGH",
+      "priority": "CRITICAL",
       "taint_flow": {
-        "pyyaml": [{"source": "request.data", "sink": "yaml.load"}]
+        "pyyaml": [
+          {
+            "source": "request.data",
+            "sink": "yaml.load",
+            "file": "app.py",
+            "line": 42
+          }
+        ]
       },
-      "public_external_exploits": [...],
-      "dynamic_evidence": {
+      "public_exploits": [...],
+      "runtime_evidence": {
         "package_loaded": true,
         "sink_executed": true
+      },
+      "static_evidence": {
+        "import_detected": true,
+        "call_chain_exists": true
       }
     }
-  ]
+  ],
+  "summary": {
+    "total_vulnerabilities": 50,
+    "reachable_vulnerabilities": 8,
+    "false_positive_reduction": "84%"
+  }
 }
 ```
+
+**Verdict Meanings:**
+- `CONFIRMED` - High confidence: Runtime + static evidence
+- `LIKELY` - Medium confidence: Package imported but sink not observed
+- `POSSIBLE` - Low confidence: Static flow detected only
+- `NOT_OBSERVED` - No evidence found (⚠️ doesn't mean safe!)
 
 ## 🔧 Architecture
 
@@ -97,60 +210,104 @@ python run_vulnreach.py ./my-app --use-container --docker-image my-app:latest
 ┌─────────────────────────────────────────────────────────────┐
 │                    VulnReach Pipeline                       │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. SBOM Generation (Syft)                                   │
-│    ↓                                                         │
+│ 1. Language Detection & SBOM Generation (Syft)              │
+│    ↓                                                        │
 │ 2. SCA Scanning (Trivy)                                     │
-│    ↓                                                         │
-│ 3. Exploit Analysis (SearchSploit) [Optional]               │
-│    ↓                                                         │
-│ 4. Static Taint Analysis (AST-based) [Python Only]          │
-│    ↓                                                         │
-│ 5. Dynamic Analysis (Container + Hooks) [Python Only]       │
+│    ↓                                                        │
+│ 3. Exploitability Analysis (SearchSploit) [Optional]        │
+│    ↓                                                        │
+│ 4. Static Analysis [Python Focus]                           │
+│    ├─ Taint Analysis (AST-based)                            │
+│    ├─ SAST Analysis (Semgrep)                               │
+│    ├─ Call Graph Generation                                 │
+│    ├─ Route Discovery                                       │
+│    └─ Reachability Scoring                                  │
+│    ↓                                                        │
+│ 5. Dynamic Analysis [Python Focus] [Optional]               │
 │    ├─ Container Detection (Dockerfile/Compose)              │
 │    ├─ Import Instrumentation (sys.meta_path hooks)          │
 │    ├─ Sink Tracking (audit hooks)                           │
 │    └─ Execution Evidence Collection                         │
-│    ↓                                                         │
-│ 6. Correlation (Static ↔ Dynamic) [Python Only]             │
-│    ↓                                                         │
-│ 7. Unified Report Generation                                │
+│    ↓                                                        │
+│ 6. Correlation (Static ↔ Dynamic) [Python Focus]            │
+│    ├─ Event Matching                                        │
+│    ├─ CVE Mapping                                           │
+│    └─ Verdict Assignment                                    │
+│    ↓                                                        │
+│ 7. Output Generation                                        │
+│    ├─ JSON Reports                                          │
+│    ├─ HTML Dashboard                                        │
+│    ├─ Markdown RBOM                                         │
+│    └─ Unified Findings                                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Components
 ```
 src/vulnreach/
-├── tracer_.py              # SBOM + SCA integration
+├── tracer_.py              # Main CLI & orchestration
 ├── taint/
-│   └── static_taint.py     # Static taint analysis
+│   ├── static_taint.py     # Static taint analysis
+│   └── tainter_engine.py   # Advanced taint engine
 ├── runtime/
-│   └── dynamic_analyzer.py # Container + hook execution
+│   └── dynamic_analyzer.py # Container + runtime hooks
 ├── correlation/
-│   └── correlator.py       # Static/dynamic correlation
-└── pipeline/
-    ├── pipeline.py         # Main orchestrator
-    └── container_detector.py # Dockerfile detection
+│   ├── correlator.py       # Main correlation logic
+│   ├── event_matcher.py    # Event matching
+│   └── cve_runtime_mapper.py # CVE mapping
+├── agents/
+│   ├── coordinator.py      # Agent orchestration
+│   └── tainter_agent.py    # Taint analysis agent
+├── rbom/
+│   └── builder.py          # RBOM generation
+├── pipeline/
+│   └── container_detector.py # Dockerfile detection
+└── utils/
+    ├── multi_language_analyzer.py # Language detection
+    ├── semgrep_runner.py   # SAST integration
+    └── exploitability_analyzer.py # Exploit search
 
 runtime_hooks/
 ├── runner.py               # Hook bootstrap
 └── hooks/
     ├── imports.py          # Import tracking
     ├── sinks.py            # Sink detection
-    └── audit.py            # System audit events
+    ├── audit.py            # System audit events
+    └── dataflow.py         # Data flow tracking
 ```
 
 ## 📊 Output Files
 
 ```
 security_findings/<project_name>/
-├── sbom.json                      # Software Bill of Materials
-├── trivy_output.json              # Raw SCA results
-├── exploitability_report.json     # Public exploits (optional)
-├── static_taint_flows.json        # Static dataflows
-├── dynamic_findings.json          # Runtime execution data
-├── correlated_findings.json       # Correlation results
-└── complete_findings.json         # ★ Final unified report
+├── sbom.json                              # Software Bill of Materials
+├── trivy_output.json                      # Raw SCA scan results
+├── security_report.json                   # Enriched vulnerability report
+├── consolidated.json                      # Fixed version recommendations
+│
+├── [Python Analysis - Optional]
+├── python_vulnerability_reachability_report.json  # Reachability analysis
+├── static_taint_flows.json                # Static dataflow analysis
+├── taint_analysis_report.json             # Advanced taint analysis
+├── dynamic_findings.json                  # Runtime execution data
+├── runtime_events.json                    # Runtime hook events
+├── correlated_findings.json               # Static+Dynamic correlation
+├── semgrep.json                           # SAST findings
+├── routes.json                            # Discovered HTTP routes
+├── sink_handler_reachability.json         # Sink-to-handler mapping
+│
+├── [Exploitability - Optional]
+├── exploitability_report.json             # Public exploits found
+│
+├── [RBOM - Optional]
+├── rbom.json                              # Runtime Bill of Materials
+├── rbom_report.md                         # Human-readable RBOM
+│
+└── [Dashboard - Optional]
+    └── report.html                        # Interactive HTML dashboard
 ```
+
+**Primary Report**: `security_report.json` contains complete vulnerability data with correlation verdicts.
 
 ## ⚠️ Known Limitations
 
@@ -226,20 +383,19 @@ else:
 
 ## 🚧 Roadmap
 
-### Q1 2026
-- [ ] Endpoint fuzzing / test replay
-- [ ] Security hardening (sandboxing)
-- [ ] Accuracy benchmarks
+### Current Status (February 2026)
+- ✅ SBOM + SCA scanning (all languages)
+- ✅ Python reachability analysis (static + dynamic + correlation)
+- ✅ Taint analysis with multiple vulnerability classes
+- ✅ RBOM generation
+- ✅ HTML dashboard
+- ⚠️ Beta: Dynamic analysis (requires Docker)
 
-### Q2 2026
-- [ ] GitHub Actions integration
-- [ ] Django/Flask/FastAPI framework improvements
-- [ ] Async/await support
+## 🤝 Contributing
 
-### Future
-- [ ] Node.js runtime reachability
-- [ ] Java bytecode instrumentation
-- [ ] Production telemetry integration
+Contributions are welcome! Please:
+
+Fork the repository -> Create a feature branch  -> Add tests for new features -> Submit a pull request
 
 ## 📄 License
 
@@ -247,11 +403,13 @@ MIT License - see [LICENSE](LICENSE)
 
 ## 🔗 Links
 
+- **Documentation**: See `/docs` directory for detailed technical docs
 - **Syft**: https://github.com/anchore/syft
 - **Trivy**: https://github.com/aquasecurity/trivy
+- **Semgrep**: https://semgrep.dev/
 - **SearchSploit**: https://www.exploit-db.com/searchsploit
 
 ---
 
-**Status**: Alpha - Not production-ready. Python-only reachability. Requires security hardening for untrusted code.
+**Status**: Beta - Python reachability analysis functional. Multi-language support in progress. Security hardening needed for untrusted code.
 
