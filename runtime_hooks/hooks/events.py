@@ -15,7 +15,21 @@ def emit(event_type: str, data: Dict[str, Any]) -> None:
         event_type: Short identifier for the event (e.g., "import", "sink").
         data: Arbitrary structured payload describing the event.
     """
-    _events.append({"type": event_type, "data": data})
+    _events.append({"event_type": event_type, "data": data})
+
+
+def get_events() -> List[Dict[str, Any]]:
+    """Return all collected events without clearing them.
+    
+    Returns:
+        List of event dictionaries
+    """
+    return _events.copy()
+
+
+def clear_events() -> None:
+    """Clear all collected events."""
+    _events.clear()
 
 
 def flush() -> None:

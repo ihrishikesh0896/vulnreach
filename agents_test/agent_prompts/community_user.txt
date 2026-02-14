@@ -1,3 +1,26 @@
+You are an experienced Python developer who just found a new open-source security tool called VulnReach.
+
+You know nothing about its internal design.
+
+Your task:
+
+1. Read the README content below.
+2. Evaluate clarity of purpose.
+3. Try to understand what problem it solves.
+4. Identify confusing parts.
+5. Identify missing documentation.
+6. Identify overclaims or vague claims.
+7. Identify installation friction.
+8. List things that would make you stop using it.
+9. List things that would make you star the repo.
+10. Be brutally honest.
+
+Act like a real open-source developer.
+Do not be polite.
+Focus on clarity, usability, credibility, and trust.
+
+README:
+
 # 🛡️ VulnReach - Python Vulnerability Reachability Analyzer
 
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)]()
@@ -9,7 +32,7 @@
 
 ### Universal Capabilities (All Languages)
 - **SBOM Generation** - Software Bill of Materials via Syft
-- **SCA Scanning** - Vulnerability detection via Trivy  
+- **SCA Scanning** - Vulnerability detection via Trivy
 - **CVE Enrichment** - Exploitability data via SearchSploit
 - **Multi-format Support** - SPDX, CycloneDX, Syft JSON
 
@@ -19,7 +42,7 @@
 - **Container Execution** - Docker-based dynamic analysis with hooks
 - **Correlation Engine** - Assigns confidence verdicts:
   - `CONFIRMED` - Runtime + static evidence
-  - `LIKELY` - Package imported, sink not observed  
+  - `LIKELY` - Package imported, sink not observed
   - `POSSIBLE` - Static flow only
   - `NOT_OBSERVED` - No evidence (⚠️ may still be reachable under different conditions)
 - **RBOM Generation** - Runtime Bill of Materials
@@ -186,7 +209,7 @@ Inputs:
 - $100/hr security engineer × 0.25hr/alert = $200k/year triage cost
 
 After VulnReach (60% FP reduction):
-- 35% FP rate = 3,500 FPs  
+- 35% FP rate = 3,500 FPs
 - $87.5k/year triage cost
 → $112k annual savings
 ```
@@ -206,7 +229,7 @@ After VulnReach (60% FP reduction):
 - **Sinks**: `eval()`, `exec()`, `pickle.loads()`, SQL execution, etc.
 - **Limitations**: No inter-procedural analysis, no async support
 
-### Dynamic Analysis  
+### Dynamic Analysis
 - **Method**: Import hooks (`sys.meta_path`) + audit hooks
 - **Captures**: Module imports, function calls, sink execution
 - **Execution**: Local or Docker container with mounted hooks
@@ -217,7 +240,7 @@ After VulnReach (60% FP reduction):
 if package_imported AND sink_executed:
     verdict = "CONFIRMED"
 elif package_imported:
-    verdict = "LIKELY"  
+    verdict = "LIKELY"
 elif static_flow_exists:
     verdict = "POSSIBLE"
 else:
@@ -255,3 +278,104 @@ MIT License - see [LICENSE](LICENSE)
 
 **Status**: Alpha - Not production-ready. Python-only reachability. Requires security hardening for untrusted code.
 
+
+
+CLI HELP:
+vulnreach --help
+usage: vulnreach [-h] [--target TARGET_FLAG] [--sbom SBOM] [--output-sbom OUTPUT_SBOM] [--output-report OUTPUT_REPORT]
+                 [--sbom-format {spdx-json,cyclonedx-json,syft-json}] [--direct-scan] [--trivy-output TRIVY_OUTPUT] [--output-consolidated OUTPUT_CONSOLIDATED]
+                 [--run-reachability] [--run-exploitability] [--run-sast] [--semgrep-rules SEMGREP_RULES] [--run-routes] [--run-taint-analysis]
+                 [--taint-vuln-classes CLASSES] [--taint-include-tests] [--run-reachability-engine] [--generate-rbom] [--no-correlation] [--run-dynamic]
+                 [--entrypoint PATH] [--init-config] [--llm-fix] [--agent-mode] [--analyze-package PACKAGE] [--analyze-cve CVE_ID] [--package-name NAME]
+                 [--entry-points POINTS] [--language LANGUAGE] [--ecosystem ECOSYSTEM]
+                 [target]
+
+Security SCA Tool using Syft and Trivy
+
+positional arguments:
+  target                Directory path or git repository URL to scan (if not using --sbom)
+
+options:
+  -h, --help            show this help message and exit
+  --target TARGET_FLAG  Directory path or git repository URL to scan (alternative to positional argument)
+  --sbom SBOM           Use existing SBOM file instead of generating new one
+  --output-sbom OUTPUT_SBOM
+                        Save generated SBOM to file
+  --output-report OUTPUT_REPORT
+                        Output path for security report (default: security_report.json)
+  --sbom-format {spdx-json,cyclonedx-json,syft-json}
+                        SBOM format for generation
+  --direct-scan         Skip SBOM generation and scan directory directly with Trivy
+  --trivy-output TRIVY_OUTPUT
+                        Save raw Trivy output to file
+  --output-consolidated OUTPUT_CONSOLIDATED
+                        Output path for consolidated fixed-version recommendations (default: consolidated.json)
+  --run-reachability    Run multi-language vulnerability reachability analysis after security scan
+  --run-exploitability  Run exploitability analysis using SearchSploit to check for public exploits
+  --run-sast            Run Semgrep SAST signal collection (V1 scope)
+  --semgrep-rules SEMGREP_RULES
+                        Override Semgrep ruleset path/URL (default: p/security-audit)
+  --run-routes          Extract HTTP routes (Flask/FastAPI/Express/Spring) to routes.json
+  --run-taint-analysis  Run comprehensive taint analysis using Tainter (source-to-sink vulnerability flow detection)
+  --taint-vuln-classes CLASSES
+                        Comma-separated vulnerability classes for taint analysis (e.g., SQLI,XSS,DESERIALIZE)
+  --taint-include-tests
+                        Include test files in taint analysis (default: excluded)
+  --run-reachability-engine
+                        Link Semgrep sinks to handlers/routes and score reachability
+  --generate-rbom       Generate Runtime Bill of Materials (RBOM) with reachability analysis
+  --no-correlation      Disable correlation analysis (static + dynamic evidence integration)
+  --run-dynamic         Run dynamic analysis using runtime hooks to collect runtime behavior
+  --entrypoint PATH     Path to application entrypoint for dynamic analysis (e.g., app.py, main.py)
+  --init-config         Create default configuration file at ~/.vulnreach/config/creds.yaml
+  --llm-fix             Use AI-powered workflow for vulnerability analysis and recommendations
+  --agent-mode          Use agent-based reachability analysis (ast-grep foundation)
+  --analyze-package PACKAGE
+                        Analyze specific package for reachability (requires --agent-mode)
+  --analyze-cve CVE_ID  Analyze specific CVE for reachability (requires --agent-mode and --package-name)
+  --package-name NAME   Package name for CVE analysis
+  --entry-points POINTS
+                        Comma-separated entry points (e.g., "app.route,main")
+  --language LANGUAGE   Programming language (default: python)
+  --ecosystem ECOSYSTEM
+                        Package ecosystem (default: PyPI)
+
+Examples:
+  # Scan local directory with SBOM generation
+  vulnreach /path/to/project --output-report security_report.json
+
+  # Scan git repository with SBOM generation
+  vulnreach https://github.com/user/repo.git --output-report security_report.json
+
+  # Scan GitHub repository (auto-detects .git)
+  vulnreach https://github.com/user/repo --output-report security_report.json
+
+  # Use existing SBOM file
+  vulnreach --sbom existing_sbom.json --output-report report.json
+
+  # Generate and save SBOM, then scan
+  vulnreach /path/to/project --output-sbom sbom.json --output-report report.json
+
+  # Direct directory scan (no SBOM generation)
+  vulnreach /path/to/project --direct-scan
+
+  # Clone and scan git repository with reachability analysis
+  vulnreach git@github.com:user/repo.git --run-reachability
+
+  # Run comprehensive taint analysis (reduces false positives)
+  vulnreach /path/to/project --run-taint-analysis
+
+  # Run taint analysis for specific vulnerability classes
+  vulnreach /path/to/project --run-taint-analysis --taint-vuln-classes SQLI,XSS,DESERIALIZE
+
+  # Run dynamic analysis with runtime hooks to capture runtime behavior
+  vulnreach /path/to/project --run-dynamic --entrypoint app.py
+
+  # Full security pipeline with static, dynamic, and correlation
+  vulnreach /path/to/project --run-reachability --run-dynamic --entrypoint app.py
+
+  # Full pipeline: SBOM + Reachability + Dynamic + Exploitability + RBOM
+  vulnreach /path/to/project --run-reachability --run-dynamic --entrypoint app.py --run-exploitability --generate-rbom
+
+  # Generate Runtime Bill of Materials (RBOM) with reachability analysis
+  vulnreach /path/to/project --generate-rbom

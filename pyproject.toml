@@ -76,7 +76,7 @@ vulnreach-scan = "vulnreach.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["vulnreach*"]
-exclude = ["tests*", "security_findings*"]
+exclude = ["tests*", "security_findings*", "labs*", "examples*", "docs*"]
 
 [tool.setuptools.package-data]
 vulnreach = ["*.json", "*.yaml", "*.yml"]

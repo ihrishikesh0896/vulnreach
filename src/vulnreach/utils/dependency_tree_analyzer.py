@@ -133,7 +133,7 @@ class PythonDependencyTreeAnalyzer(DependencyTreeAnalyzer):
         """Check if pipdeptree is installed"""
         try:
             result = subprocess.run(['pipdeptree', '--version'],
-                                  capture_output=True,
+                                  stdout=subprocess.DEVNULL,
                                   stderr=subprocess.DEVNULL)
             return result.returncode == 0
         except FileNotFoundError:

@@ -18,10 +18,11 @@ pip install requests
 from vulnreach.utils.multi_language_analyzer import run_multi_language_analysis
 from vulnreach.utils.reachability_engine import run_reachability_engine
 from vulnreach.utils.exploitability_analyzer import ExploitabilityAnalyzer
-from vulnreach.utils.ai_analyzer import AIVulnerabilityAnalyzer, print_ai_analysis_summary
 from vulnreach.config import get_config_loader
 from vulnreach.utils.html_reporter import HtmlReporter
 from vulnreach.rbom import create_rbom_from_analysis, save_rbom
+from vulnreach.runtime.dynamic_analyzer import run_dynamic_analysis_pipeline
+from vulnreach.correlation.correlator import run_correlation_pipeline
 import os
 import json
 import sys
@@ -63,6 +64,12 @@ class Vulnerability:
     cvss_vector: Optional[str] = None
     cwe_ids: List[str] = None
     references: List[str] = None
+    # Correlation fields (added for RBOM)
+    verdict: Optional[str] = None
+    confidence: Optional[str] = None
+    priority: Optional[str] = None
+    runtime_evidence: Optional[Dict[str, Any]] = None
+    static_evidence: Optional[Dict[str, Any]] = None
 
 
 class SyftSBOMGenerator:
@@ -564,7 +571,13 @@ class SecurityReporter:
                     "cvss_vector": vuln.cvss_vector,
                     "cwe_ids": vuln.cwe_ids or [],
                     "references": vuln.references or [],
-                    "primary_url": vuln.primary_url
+                    "primary_url": vuln.primary_url,
+                    # Correlation fields (RBOM enrichment)
+                    "verdict": vuln.verdict,
+                    "confidence": vuln.confidence,
+                    "priority": vuln.priority,
+                    "runtime_evidence": vuln.runtime_evidence,
+                    "static_evidence": vuln.static_evidence
                 }
                 for vuln in vulnerabilities
             ]
@@ -636,6 +649,19 @@ class SecurityReporter:
                 print(f"{severity_icon} {vuln['id']} - {vuln['package_name']}@{vuln['package_version']}")
                 print(f"   Severity: {vuln['severity']}{cvss_info}")
                 print(f"   Title: {vuln['title']}")
+
+                # Show correlation data if available
+                if vuln.get('priority'):
+                    priority_icon = "🚨" if vuln['priority'] == 'CRITICAL' else "⚠️" if vuln['priority'] == 'HIGH' else "ℹ️"
+                    print(f"   {priority_icon} Priority: {vuln['priority']}")
+                if vuln.get('verdict'):
+                    verdict_icon = "🔴" if vuln['verdict'] == 'REACHABLE' else "🟢" if vuln['verdict'] == 'NOT_REACHABLE' else "🟡"
+                    print(f"   {verdict_icon} Verdict: {vuln['verdict']}")
+                if vuln.get('confidence'):
+                    confidence_stars = "⭐" * {'HIGH': 3, 'MEDIUM': 2, 'LOW': 1, 'NONE': 0}.get(vuln['confidence'], 0)
+                    if confidence_stars:
+                        print(f"   {confidence_stars} Confidence: {vuln['confidence']}")
+
                 if vuln['fixed_version']:
                     print(f"   🔧 Fixed in: {vuln['fixed_version']}")
                 print()
@@ -789,6 +815,199 @@ def version_key(v: str) -> Tuple:
         parts.append(int(num) if num else 0)
     return tuple(parts)
 
+
+def enrich_vulnerabilities_with_correlation(
+    vulnerabilities: List[Vulnerability],
+    project_findings_dir: str,
+    enable_correlation: bool = True
+) -> List[Vulnerability]:
+    """Enrich vulnerabilities with correlation analysis (static + dynamic evidence)
+
+    Args:
+        vulnerabilities: List of vulnerabilities from Trivy scan
+        project_findings_dir: Path to security_findings directory
+        enable_correlation: Whether to run correlation (can be disabled with flag)
+
+    Returns:
+        Enriched list of vulnerabilities with verdict, confidence, and evidence
+    """
+    if not enable_correlation:
+        return vulnerabilities
+
+    try:
+        from vulnreach.correlation.cve_runtime_mapper import CVERuntimeMapper
+        from vulnreach.correlation.event_matcher import EventMatcher
+        from vulnreach.rbom.schema import Priority
+
+        print("\n🔗 Running correlation analysis (static + dynamic evidence)...")
+
+        # Load runtime events if available
+        runtime_events_path = os.path.join(project_findings_dir, "runtime_events.json")
+        runtime_events = []
+        if os.path.exists(runtime_events_path):
+            try:
+                with open(runtime_events_path, 'r') as f:
+                    runtime_events = json.load(f)
+                print(f"   ✅ Loaded {len(runtime_events)} runtime events")
+            except Exception as e:
+                print(f"   ⚠️  Could not load runtime events: {e}")
+
+        # Load static analysis results if available (from reachability analysis)
+        static_results = {}
+        reachability_files = [
+            f for f in os.listdir(project_findings_dir)
+            if f.endswith('_vulnerability_reachability_report.json')
+        ]
+
+        if reachability_files:
+            try:
+                reach_file = os.path.join(project_findings_dir, reachability_files[0])
+                with open(reach_file, 'r') as f:
+                    reach_data = json.load(f)
+
+                # Build static results dict from reachability report
+                for vuln_data in reach_data.get('vulnerabilities', []):
+                    pkg_name = vuln_data.get('package_name', '')
+                    if pkg_name:
+                        static_results[pkg_name] = {
+                            'import_detected': vuln_data.get('usage_pattern', '') != 'NOT_USED',
+                            'call_chain_exists': vuln_data.get('risk_level', '') in ['CRITICAL', 'HIGH'],
+                            'entry_points': [],
+                            'call_chains': [],
+                            'vulnerable_functions': []
+                        }
+                print(f"   ✅ Loaded static analysis for {len(static_results)} packages")
+            except Exception as e:
+                print(f"   ⚠️  Could not load static analysis: {e}")
+
+        # Build SBOM components for event matching
+        sbom_components = []
+        for vuln in vulnerabilities:
+            sbom_components.append({
+                'name': vuln.pkg_name,
+                'version': vuln.pkg_version
+            })
+
+        # Match runtime events to packages
+        correlations = {}
+        if runtime_events:
+            matcher = EventMatcher()
+            correlations = matcher.match_import_events(runtime_events, sbom_components)
+            print(f"   ✅ Matched runtime events to {len(correlations)} packages")
+
+        # Run correlation analysis
+        mapper = CVERuntimeMapper()
+        enriched_count = 0
+
+        for vuln in vulnerabilities:
+            # Get correlation data for this package
+            correlation = correlations.get(vuln.pkg_name)
+            static = static_results.get(vuln.pkg_name)
+
+            # Calculate reachability
+            verdict, confidence, runtime_ev, static_ev = mapper.calculate_reachability(
+                vuln.vulnerability_id,
+                vuln.pkg_name,
+                vuln.pkg_version,
+                correlation,
+                static
+            )
+
+            # Enrich vulnerability with correlation results
+            vuln.verdict = verdict.value
+            vuln.confidence = confidence.value
+
+            # Calculate priority based on severity + reachability
+            vuln.priority = _calculate_priority(vuln.severity, verdict.value, confidence.value)
+
+            # Store evidence
+            if runtime_ev:
+                vuln.runtime_evidence = runtime_ev.to_dict()
+            if static_ev:
+                vuln.static_evidence = static_ev.to_dict()
+
+            enriched_count += 1
+
+        print(f"   ✅ Enriched {enriched_count} vulnerabilities with correlation data")
+
+        # Print correlation summary
+        _print_correlation_summary(vulnerabilities)
+
+        return vulnerabilities
+
+    except ImportError as e:
+        print(f"   ⚠️  Correlation modules not available: {e}")
+        return vulnerabilities
+    except Exception as e:
+        print(f"   ⚠️  Correlation analysis failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return vulnerabilities
+
+
+def _calculate_priority(severity: str, verdict: str, confidence: str) -> str:
+    """Calculate remediation priority based on severity + reachability + confidence"""
+    # CRITICAL: High/Critical severity + Reachable + High confidence
+    if severity in ['CRITICAL', 'HIGH'] and verdict == 'REACHABLE' and confidence == 'HIGH':
+        return 'CRITICAL'
+
+    # HIGH: High severity + Reachable OR Medium severity + Reachable + High confidence
+    if severity in ['CRITICAL', 'HIGH'] and verdict == 'REACHABLE':
+        return 'HIGH'
+    if severity == 'MEDIUM' and verdict == 'REACHABLE' and confidence == 'HIGH':
+        return 'HIGH'
+
+    # MEDIUM: Medium severity + some reachability signal
+    if severity == 'MEDIUM' and verdict in ['REACHABLE', 'UNKNOWN']:
+        return 'MEDIUM'
+
+    # LOW: Low severity or not reachable
+    if severity == 'LOW' or verdict == 'NOT_REACHABLE':
+        return 'LOW'
+
+    # INFO: Everything else
+    return 'INFO'
+
+
+def _print_correlation_summary(vulnerabilities: List[Vulnerability]):
+    """Print summary of correlation analysis results"""
+    verdict_counts = {'REACHABLE': 0, 'NOT_REACHABLE': 0, 'UNKNOWN': 0, None: 0}
+    confidence_counts = {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0, 'NONE': 0, None: 0}
+    priority_counts = {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0, 'INFO': 0, None: 0}
+
+    for vuln in vulnerabilities:
+        verdict_counts[vuln.verdict] = verdict_counts.get(vuln.verdict, 0) + 1
+        confidence_counts[vuln.confidence] = confidence_counts.get(vuln.confidence, 0) + 1
+        priority_counts[vuln.priority] = priority_counts.get(vuln.priority, 0) + 1
+
+    print("\n📊 Correlation Analysis Summary:")
+    print("   Reachability Verdicts:")
+    if verdict_counts.get('REACHABLE', 0) > 0:
+        print(f"      🔴 REACHABLE: {verdict_counts['REACHABLE']}")
+    if verdict_counts.get('NOT_REACHABLE', 0) > 0:
+        print(f"      🟢 NOT_REACHABLE: {verdict_counts['NOT_REACHABLE']}")
+    if verdict_counts.get('UNKNOWN', 0) > 0:
+        print(f"      🟡 UNKNOWN: {verdict_counts['UNKNOWN']}")
+
+    print("   Confidence Levels:")
+    if confidence_counts.get('HIGH', 0) > 0:
+        print(f"      ⭐⭐⭐ HIGH: {confidence_counts['HIGH']}")
+    if confidence_counts.get('MEDIUM', 0) > 0:
+        print(f"      ⭐⭐ MEDIUM: {confidence_counts['MEDIUM']}")
+    if confidence_counts.get('LOW', 0) > 0:
+        print(f"      ⭐ LOW: {confidence_counts['LOW']}")
+
+    print("   Priority Distribution:")
+    if priority_counts.get('CRITICAL', 0) > 0:
+        print(f"      🚨 CRITICAL: {priority_counts['CRITICAL']} (FIX NOW)")
+    if priority_counts.get('HIGH', 0) > 0:
+        print(f"      🟠 HIGH: {priority_counts['HIGH']}")
+    if priority_counts.get('MEDIUM', 0) > 0:
+        print(f"      🟡 MEDIUM: {priority_counts['MEDIUM']}")
+    if priority_counts.get('LOW', 0) > 0:
+        print(f"      🟢 LOW: {priority_counts['LOW']}")
+
+
 def consolidate_fixed_versions(scan: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Map installed versions from components (case-insensitive name match)
     installed = {}
@@ -905,282 +1124,6 @@ def create_default_config():
         sys.exit(1)
 
 
-def run_ai_workflow(vulnerabilities: List[Vulnerability], components: List[Component], project_findings_dir: str):
-    """
-    Run AI-powered vulnerability analysis and recommendations workflow
-    
-    Args:
-        vulnerabilities: List of discovered vulnerabilities
-        components: List of discovered components
-        project_findings_dir: Directory to save AI analysis results
-    """
-    print("\n🤖 Starting AI-powered vulnerability analysis...")
-    
-    try:
-        # Initialize AI analyzer
-        ai_analyzer = AIVulnerabilityAnalyzer()
-        print(f"🔧 Using AI analyzer with {len(ai_analyzer.config.providers)} configured providers")
-        
-        # Load existing analysis results
-        vulnerability_data = []
-        for vuln in vulnerabilities:
-            vuln_dict = {
-                'id': vuln.vulnerability_id,
-                'package_name': vuln.pkg_name,
-                'package_version': vuln.pkg_version,
-                'severity': vuln.severity,
-                'title': vuln.title,
-                'description': vuln.description,
-                'fixed_version': vuln.fixed_version,
-                'cvss_score': vuln.cvss_score,
-                'cvss_vector': vuln.cvss_vector,
-                'cwe_ids': vuln.cwe_ids or [],
-                'references': vuln.references or [],
-                'primary_url': vuln.primary_url
-            }
-            vulnerability_data.append(vuln_dict)
-        
-        # Load reachability analysis if available
-        reachability_data = {}
-        reachability_report_paths = [
-            os.path.join(project_findings_dir, "vulnerability_reachability_report.json"),
-            os.path.join(project_findings_dir, "python_vulnerability_reachability_report.json"),
-            os.path.join(project_findings_dir, "java_vulnerability_reachability_report.json")
-        ]
-        
-        for reachability_path in reachability_report_paths:
-            if os.path.exists(reachability_path):
-                try:
-                    with open(reachability_path, 'r') as f:
-                        reachability_data = json.load(f)
-                    print(f"📊 Loaded reachability analysis from: {reachability_path}")
-                    break
-                except Exception as e:
-                    print(f"⚠️  Warning: Could not load reachability data from {reachability_path}: {e}")
-        
-        # Load exploitability analysis if available
-        exploitability_data = {}
-        exploitability_path = os.path.join(project_findings_dir, "exploitability_report.json")
-        if os.path.exists(exploitability_path):
-            try:
-                with open(exploitability_path, 'r') as f:
-                    exploitability_data = json.load(f)
-                print(f"💥 Loaded exploitability analysis from: {exploitability_path}")
-            except Exception as e:
-                print(f"⚠️  Warning: Could not load exploitability data: {e}")
-        
-        # Perform AI analysis
-        print("🧠 Performing AI-powered integrated analysis...")
-        ai_analyses, ai_summary = ai_analyzer.analyze_integrated_results(
-            vulnerability_data, reachability_data, exploitability_data
-        )
-        
-        # Generate comprehensive AI report
-        ai_report_path = os.path.join(project_findings_dir, "fix_analysis_report.json")
-        ai_analyzer.generate_ai_report(ai_analyses, ai_summary, ai_report_path)
-        
-        # Print AI analysis summary
-        print_ai_analysis_summary(ai_summary)
-        
-        print(f"\n🤖 AI analysis completed successfully!")
-        print(f"📄 Comprehensive AI report saved to: {ai_report_path}")
-        print(f"🎯 Priority actions identified: {ai_summary.critical_recommendations + ai_summary.high_priority_actions}")
-
-        # If LLM fix mode is enabled, request LLM-based remediation fixes
-        try:
-            consolidated_path = os.path.join(project_findings_dir, 'consolidated.json')
-            llm_output_path = os.path.join(project_findings_dir, 'llm_recommendations.json')
-            reachability_paths = [p for p in reachability_report_paths if os.path.exists(p)]
-            if reachability_paths and os.path.exists(consolidated_path):
-                print("🔁 Requesting LLM remediation recommendations (local Ollama)...")
-                llm_result = ai_analyzer.request_llm_fix_from_files(consolidated_path, reachability_paths, llm_output_path)
-                if llm_result:
-                    print(f"✅ LLM remediation recommendations saved to: {llm_output_path}")
-                else:
-                    print("⚠️  LLM did not return recommendations or parsing failed")
-            else:
-                print("⚠️  Skipping LLM remediation: missing consolidated.json or reachability reports")
-        except Exception as e:
-            print(f"⚠️  Error requesting LLM remediation: {e}")
-
-    except Exception as e:
-        print(f"❌ Error in AI workflow: {e}")
-        print("💡 Falling back to traditional analysis workflow")
-        
-        # Fallback: create a basic analysis report
-        try:
-            fallback_analysis = {
-                "analysis_type": "AI-powered vulnerability analysis (fallback mode)",
-                "timestamp": datetime.now().isoformat(),
-                "total_vulnerabilities": len(vulnerabilities),
-                "total_components": len(components),
-                "status": "fallback_implementation",
-                "error": str(e),
-                "basic_recommendations": [
-                    {
-                        "priority": "HIGH",
-                        "recommendation": f"Review and remediate {len([v for v in vulnerabilities if v.severity in ['CRITICAL', 'HIGH']])} critical/high severity vulnerabilities",
-                        "reasoning": "AI analysis failed, falling back to basic severity-based recommendations"
-                    }
-                ]
-            }
-            
-            fallback_report_path = os.path.join(project_findings_dir, "ai_analysis_fallback.json")
-            with open(fallback_report_path, 'w') as f:
-                json.dump(fallback_analysis, f, indent=2)
-            
-            print(f"📄 Fallback analysis saved to: {fallback_report_path}")
-        except Exception as fallback_error:
-            print(f"❌ Fallback analysis also failed: {fallback_error}")
-
-
-def run_agent_mode(args):
-    """
-    Run agent-based reachability analysis
-    """
-    import json
-    from vulnreach.agents import AgentCoordinator
-    
-    print("🤖 Agent-Based Reachability Analysis")
-    print("=" * 70)
-    
-    # Handle git repository cloning if target is a git URL
-    temp_clone_dir = None
-    is_temp_clone = False
-    actual_target = args.target if args.target else os.getcwd()
-    
-    if args.target and is_git_url(args.target):
-        temp_clone_dir, is_temp_clone = clone_git_repository(args.target)
-        if not temp_clone_dir:
-            print("❌ Failed to clone git repository")
-            return 1
-        actual_target = temp_clone_dir
-    
-    try:
-        # Determine target directory
-        target = actual_target
-        
-        # Parse entry points
-        entry_points = None
-        if args.entry_points:
-            entry_points = [ep.strip() for ep in args.entry_points.split(',')]
-        
-        # Initialize coordinator
-        coordinator = AgentCoordinator(target)
-        
-        result = None
-        
-        # Mode 1: Analyze specific package
-        if args.analyze_package:
-            print(f"\n📦 Analyzing package: {args.analyze_package}")
-            result = coordinator.analyze_package(
-                package_name=args.analyze_package,
-                entry_points=entry_points,
-                language=args.language,
-                ecosystem=args.ecosystem
-            )
-        
-        # Mode 2: Analyze specific CVE
-        elif args.analyze_cve:
-            if not args.package_name:
-                print("❌ Error: --analyze-cve requires --package-name")
-                sys.exit(1)
-            
-            print(f"\n🔍 Analyzing CVE: {args.analyze_cve}")
-            result = coordinator.analyze_cve(
-                cve_id=args.analyze_cve,
-                package_name=args.package_name,
-                entry_points=entry_points,
-                language=args.language
-            )
-                    
-        # Mode 3: Full project analysis
-        else:
-            print(f"\n🔍 Full project analysis")
-            print(f"Target: {target}")
-            result = coordinator.analyze_project(
-                entry_points=entry_points,
-                language=args.language,
-                ecosystem=args.ecosystem
-            )
-            
-        # Display results
-        if result:
-            print("\n" + "=" * 70)
-            print("📊 ANALYSIS RESULTS")
-            print("=" * 70)
-            
-            if 'error' in result:
-                print(f"\n❌ Error: {result['error']}")
-            else:
-                # Print summary
-                print(f"\n📋 Summary:")
-                print(f"  Package Manager: {result.get('package_manager', 'N/A')}")
-                print(f"  Dependencies Checked: {result.get('dependencies_checked', 0)}")
-                print(f"  Total Vulnerabilities: {result.get('total_vulnerabilities', 0)}")
-                print(f"  Reachable Vulnerabilities: {result.get('reachable_vulnerabilities', 0)}")
-                print(f"  High Confidence: {result.get('high_confidence_reachable', 0)}")
-                
-                summary = result.get('summary', {})
-                risk_level = summary.get('risk_level', 'unknown').upper()
-                
-                # Color coding for risk level
-                risk_emoji = {
-                    'CRITICAL': '🔴',
-                    'HIGH': '🟠',
-                    'MEDIUM': '🟡',
-                    'LOW': '🟢',
-                    'NONE': '✅'
-                }
-                
-                print(f"\n{risk_emoji.get(risk_level, '⚪')} Risk Level: {risk_level}")
-                print(f"\n💡 Recommendation:")
-                print(f"  {summary.get('recommendation', 'N/A')}")
-                
-                # Print findings if any
-                findings = result.get('findings', [])
-                if findings:
-                    print(f"\n📝 Detailed Findings ({len(findings)} total):")
-                    for i, finding in enumerate(findings[:5], 1):  # Show first 5
-                        vuln_id = finding.get('vulnerability_id', 'UNKNOWN')
-                        pkg = finding.get('package', 'N/A')
-                        reachable = '✅' if finding.get('reachable') else '❌'
-                        confidence = finding.get('confidence', 'N/A')
-                        
-                        print(f"\n  {i}. {vuln_id}")
-                        print(f"     Package: {pkg}")
-                        print(f"     Reachable: {reachable} (Confidence: {confidence})")
-                        print(f"     Reason: {finding.get('reason', 'N/A')}")
-                    
-                    if len(findings) > 5:
-                        print(f"\n  ... and {len(findings) - 5} more findings")
-            
-            # Export report
-            project_name = get_project_name(target)
-            findings_dir = create_security_findings_dir(project_name)
-            
-            report_path = os.path.join(findings_dir, 'agent_reachability_report.json')
-            with open(report_path, 'w') as f:
-                json.dump(result, f, indent=2)
-            
-            print(f"\n💾 Full report saved to: {report_path}")
-            
-            # Also generate markdown report
-            md_path = os.path.join(findings_dir, 'agent_reachability_report.md')
-            coordinator.export_report(result, md_path, format='markdown')
-            print(f"💾 Markdown report saved to: {md_path}")
-            
-            print("\n" + "=" * 70)
-        
-    finally:
-        # Clean up temporary clone directory
-        if is_temp_clone and temp_clone_dir and os.path.exists(temp_clone_dir):
-            print(f"\n🧹 Cleaning up temporary clone: {temp_clone_dir}")
-            import shutil
-            shutil.rmtree(temp_clone_dir, ignore_errors=True)
-    
-    return 0
-
 
 def main():
     start_time = time.time()
@@ -1216,18 +1159,22 @@ Examples:
   # Run taint analysis for specific vulnerability classes
   %(prog)s /path/to/project --run-taint-analysis --taint-vuln-classes SQLI,XSS,DESERIALIZE
 
-  # Full security pipeline with taint analysis
-  %(prog)s /path/to/project --run-reachability --run-taint-analysis --run-exploitability
+  # Run dynamic analysis with runtime hooks to capture runtime behavior
+  %(prog)s /path/to/project --run-dynamic --entrypoint app.py
+
+  # Full security pipeline with static, dynamic, and correlation
+  %(prog)s /path/to/project --run-reachability --run-dynamic --entrypoint app.py
+
+  # Full pipeline: SBOM + Reachability + Dynamic + Exploitability + RBOM
+  %(prog)s /path/to/project --run-reachability --run-dynamic --entrypoint app.py --run-exploitability --generate-rbom
 
   # Generate Runtime Bill of Materials (RBOM) with reachability analysis
   %(prog)s /path/to/project --generate-rbom
-
-  # Full pipeline: SBOM + Reachability + Exploitability + RBOM
-  %(prog)s /path/to/project --run-reachability --run-exploitability --generate-rbom
         """
     )
 
     parser.add_argument('target', nargs='?', help='Directory path or git repository URL to scan (if not using --sbom)')
+    parser.add_argument('--target', dest='target_flag', help='Directory path or git repository URL to scan (alternative to positional argument)')
     parser.add_argument('--sbom', help='Use existing SBOM file instead of generating new one')
     parser.add_argument('--output-sbom', help='Save generated SBOM to file')
     parser.add_argument('--output-report', help='Output path for security report (default: security_report.json)')
@@ -1258,61 +1205,28 @@ Examples:
                         help='Link Semgrep sinks to handlers/routes and score reachability')
     parser.add_argument('--generate-rbom', action='store_true',
                         help='Generate Runtime Bill of Materials (RBOM) with reachability analysis')
+    parser.add_argument('--no-correlation', action='store_true',
+                        help='Disable correlation analysis (static + dynamic evidence integration)')
+    parser.add_argument('--run-dynamic', action='store_true',
+                        help='Run dynamic analysis using runtime hooks to collect runtime behavior')
+    parser.add_argument('--entrypoint', metavar='PATH',
+                        help='Path to application entrypoint for dynamic analysis (e.g., app.py, main.py)')
     parser.add_argument('--init-config', action='store_true',
                         help='Create default configuration file at ~/.vulnreach/config/creds.yaml')
-    parser.add_argument('--llm-fix', action='store_true',
-                        help='Use AI-powered workflow for vulnerability analysis and recommendations')
-    
-    # Agent-based analysis flags
-    parser.add_argument('--agent-mode', action='store_true',
-                        help='Use agent-based reachability analysis (ast-grep foundation)')
-    parser.add_argument('--analyze-package', metavar='PACKAGE',
-                        help='Analyze specific package for reachability (requires --agent-mode)')
-    parser.add_argument('--analyze-cve', metavar='CVE_ID',
-                        help='Analyze specific CVE for reachability (requires --agent-mode and --package-name)')
-    parser.add_argument('--package-name', metavar='NAME',
-                        help='Package name for CVE analysis')
-    parser.add_argument('--entry-points', metavar='POINTS',
-                        help='Comma-separated entry points (e.g., "app.route,main")')
-    parser.add_argument('--language', default='python',
-                        help='Programming language (default: python)')
-    parser.add_argument('--ecosystem', default='PyPI',
-                        help='Package ecosystem (default: PyPI)')
+
 
     args = parser.parse_args()
 
-    # Handle agent-based analysis modes
-    if args.agent_mode or args.analyze_package or args.analyze_cve:
-        return run_agent_mode(args)
+    # Handle both positional target and --target flag (--target takes precedence)
+    if args.target_flag:
+        args.target = args.target_flag
+
 
     # Handle config initialization
     if args.init_config:
         create_default_config()
         return
 
-    # Handle LLM fix workflow - check credentials early
-    ai_workflow_enabled = False
-    if args.llm_fix:
-        from vulnreach.config import get_config_loader
-
-        config_path = os.path.expanduser("~/.vulnreach/config/creds.yaml")
-        if not os.path.exists(config_path):
-            print("❌ AI workflow requires configuration file but creds.yaml not found")
-            print("   Running traditional workflow instead")
-        else:
-            try:
-                config_loader = get_config_loader()
-                has_keys, valid_providers = config_loader.has_valid_api_keys()
-
-                if has_keys:
-                    ai_workflow_enabled = True
-                    print(f"🤖 Using AI workflow with providers: {', '.join(valid_providers)}")
-                else:
-                    print("❌ AI workflow skipped - no valid API keys found in configuration")
-                    print("   Running traditional workflow instead")
-            except Exception as e:
-                print("❌ AI workflow skipped - error loading configuration")
-                print("   Running traditional workflow instead")
 
     # Validate arguments
     if not args.sbom and not args.target:
@@ -1415,6 +1329,15 @@ Examples:
                 print("❌ Failed to generate SBOM")
                 sys.exit(1)
 
+        # Run correlation analysis (enrich vulnerabilities with static + dynamic evidence)
+        # This runs by default but can be disabled with --no-correlation flag
+        enable_correlation = not getattr(args, 'no_correlation', False)
+        vulnerabilities = enrich_vulnerabilities_with_correlation(
+            vulnerabilities,
+            project_findings_dir,
+            enable_correlation
+        )
+
         # Calculate scan duration up to this point for the report
         scan_duration = time.time() - start_time
         
@@ -1436,9 +1359,9 @@ Examples:
 
         print(f"🧩 Consolidated recommendations saved to: {args.output_consolidated}")
 
-        # Run reachability analysis if requested (both traditional and AI workflows)
+        # Run reachability analysis if requested
         reachability_completed = False
-        if args.run_reachability or args.llm_fix:
+        if args.run_reachability:
             print("\n🔍 Running multi-language vulnerability reachability analysis...")
             detected_language = run_multi_language_analysis(actual_target or ".", args.output_consolidated, project_findings_dir)
             print(f"📊 Reachability analysis completed for {detected_language.upper()} project")
@@ -1570,6 +1493,69 @@ Examples:
                 import traceback
                 traceback.print_exc()
 
+        # Run dynamic analysis if requested
+        dynamic_results = None
+        if args.run_dynamic:
+            if not args.entrypoint:
+                print("⚠️  Dynamic analysis requires --entrypoint flag (e.g., --entrypoint app.py)")
+                print("   Skipping dynamic analysis...")
+            else:
+                print("\n" + "=" * 70)
+                print("🔄 Starting Dynamic Analysis with Runtime Hooks")
+                print("=" * 70)
+                
+                try:
+                    # Run dynamic analysis pipeline
+                    dynamic_results = run_dynamic_analysis_pipeline(
+                        project_root=actual_target or ".",
+                        entrypoint=args.entrypoint,
+                        output_dir=project_findings_dir
+                    )
+                    
+                    if dynamic_results and not dynamic_results.get("error"):
+                        print("✅ Dynamic analysis completed successfully!")
+                        print("=" * 70)
+                    else:
+                        print("⚠️  Dynamic analysis completed with errors")
+                        
+                except Exception as e:
+                    print(f"❌ Dynamic analysis failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+        # Run correlation analysis (static + dynamic)
+        correlated_findings = None
+        if vulnerabilities and not args.no_correlation:
+            try:
+                # Convert vulnerabilities to dict format for correlation
+                static_findings_dict = []
+                for vuln in vulnerabilities:
+                    vuln_dict = {
+                        "vulnerability_id": vuln.vulnerability_id,
+                        "pkg_name": vuln.pkg_name,
+                        "pkg_version": vuln.pkg_version,
+                        "severity": vuln.severity,
+                        "title": vuln.title,
+                        "description": vuln.description,
+                        "cvss_score": vuln.cvss_score,
+                        "cwe_ids": vuln.cwe_ids or [],
+                        "fixed_version": vuln.fixed_version,
+                    }
+                    static_findings_dict.append(vuln_dict)
+                
+                # Run correlation
+                correlated_findings = run_correlation_pipeline(
+                    project_findings_dir=project_findings_dir,
+                    static_findings=static_findings_dict,
+                    dynamic_results=dynamic_results,
+                    skip_correlation=args.no_correlation
+                )
+                
+            except Exception as e:
+                print(f"⚠️  Correlation analysis failed: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Link Semgrep sinks to handlers/routes if requested
         reachability_engine_completed = False
         if args.run_reachability_engine:
@@ -1585,9 +1571,9 @@ Examples:
                 except Exception as err:
                     print(f"⚠️  Reachability engine failed: {err}")
 
-        # Run exploitability analysis if requested (both traditional and AI workflows)
+        # Run exploitability analysis if requested
         exploitability_completed = False
-        if (args.run_exploitability or args.llm_fix) and vulnerabilities:
+        if args.run_exploitability and vulnerabilities:
             print("\n💥 Running exploitability analysis using SearchSploit...")
             exploit_analyzer = ExploitabilityAnalyzer()
             
@@ -1686,12 +1672,9 @@ Examples:
             else:
                 print("💥 No reachable vulnerabilities found for exploit analysis")
                 exploitability_completed = False
-        elif (args.run_exploitability or args.llm_fix) and not vulnerabilities:
+        elif args.run_exploitability and not vulnerabilities:
             print("\n💥 No vulnerabilities found - skipping exploitability analysis")
 
-        # Run AI-powered analysis if enabled and credentials are available
-        if ai_workflow_enabled:
-            run_ai_workflow(vulnerabilities, components, project_findings_dir)
 
         # Generate RBOM if requested
         if args.generate_rbom:

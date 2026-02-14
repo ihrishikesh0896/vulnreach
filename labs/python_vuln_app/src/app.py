@@ -90,4 +90,4 @@ def request_test():
 if __name__ == '__main__':
     print("Starting SBOM/SCA test application...")
     print("WARNING: This application contains vulnerable dependencies for testing purposes only!")
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=True, host='127.0.0.1', port=8002)
