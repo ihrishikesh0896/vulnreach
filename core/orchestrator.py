@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Dict, Set, Tuple
 from urllib.parse import unquote
@@ -76,6 +77,58 @@ class Orchestrator:
         self.correlation_service = correlation_service
 
     async def execute_scan(
+        self,
+        scan_id: str,
+        repo_path: str,
+        config_path: str,
+        config: Any,
+        repo_url: str | None,
+    ) -> None:
+        try:
+            await self._execute_scan_inner(scan_id, repo_path, config_path, config, repo_url)
+        except asyncio.CancelledError:
+            # Surface user-initiated cancellation distinctly from failure.
+            self.storage.update_scan_status(scan_id, "cancelled")
+            logger.info("scan_cancelled", extra={"scan_id": scan_id})
+            await self._maybe_notify_failure(
+                scan_id, "cancelled", config, repo_url or repo_path,
+                error="Scan was cancelled before completion.",
+            )
+            raise
+        except asyncio.TimeoutError as exc:
+            self.storage.update_scan_status(scan_id, "failed")
+            logger.error("scan_timeout", extra={"scan_id": scan_id})
+            await self._maybe_notify_failure(
+                scan_id, "timeout", config, repo_url or repo_path, error=str(exc),
+            )
+        except Exception as exc:
+            self.storage.update_scan_status(scan_id, "failed")
+            logger.exception("scan_unhandled_error", extra={"scan_id": scan_id})
+            await self._maybe_notify_failure(
+                scan_id, "error", config, repo_url or repo_path,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
+    async def _maybe_notify_failure(
+        self,
+        scan_id: str,
+        status: str,
+        config: Any,
+        repo: str,
+        error: str,
+    ) -> None:
+        if not (getattr(config, "notifications", None) and config.notifications.slack):
+            return
+        from api.notifications import SlackNotifier
+        await SlackNotifier(self.storage).notify_scan_complete(
+            scan_id=scan_id,
+            status=status,
+            summary={},
+            repo=repo,
+            error=error,
+        )
+
+    async def _execute_scan_inner(
         self,
         scan_id: str,
         repo_path: str,
@@ -338,3 +391,17 @@ class Orchestrator:
                 "fatal_tools": fatal_tools,
             },
         )
+
+        # Fire-and-forget notifications — gated by vulnreach.yaml notifications.*
+        # A failed notification must never affect the scan result.
+        if getattr(config, "notifications", None) and config.notifications.slack:
+            from api.notifications import SlackNotifier
+            await SlackNotifier(self.storage).notify_scan_complete(
+                scan_id=scan_id,
+                status=status,
+                summary=summary,
+                repo=repo_url or repo_path,
+                pipeline_status=correlation_output["pipeline_status"],
+                failed_tools=failed_tools,
+                fatal_tools=fatal_tools,
+            )

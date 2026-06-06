@@ -69,6 +69,18 @@ class StorageRepository(ABC):
     def delete_scan(self, scan_id: str) -> bool:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_connector(self, connector_id: str) -> Optional[Dict[str, Any]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def upsert_connector(self, connector_id: str, config: Dict[str, Any]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete_connector(self, connector_id: str) -> bool:
+        raise NotImplementedError
+
 
 class PostgresRepository(StorageRepository):
     def __init__(self, dsn: Optional[str] = None) -> None:
@@ -333,6 +345,13 @@ class PostgresRepository(StorageRepository):
             "CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);",
             "CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);",
             "CREATE INDEX IF NOT EXISTS idx_api_keys_key_prefix ON api_keys(key_prefix);",
+            """
+            CREATE TABLE IF NOT EXISTS connectors (
+                id TEXT PRIMARY KEY,
+                config JSONB NOT NULL DEFAULT '{}'::jsonb,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            """,
         ]
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -753,6 +772,34 @@ class PostgresRepository(StorageRepository):
                     "DELETE FROM api_keys WHERE id = %s AND user_id = %s",
                     (key_id, user_id),
                 )
+                return cur.rowcount > 0
+
+    # ── Connectors ────────────────────────────────────────────────────
+
+    def get_connector(self, connector_id: str) -> Optional[Dict[str, Any]]:
+        with self._conn() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT config FROM connectors WHERE id = %s", (connector_id,))
+                row = cur.fetchone()
+        if not row:
+            return None
+        cfg = row["config"]
+        return dict(cfg) if cfg else {}
+
+    def upsert_connector(self, connector_id: str, config: Dict[str, Any]) -> None:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO connectors (id, config, updated_at)
+                       VALUES (%s, %s, NOW())
+                       ON CONFLICT (id) DO UPDATE SET config = EXCLUDED.config, updated_at = NOW()""",
+                    (connector_id, Json(config)),
+                )
+
+    def delete_connector(self, connector_id: str) -> bool:
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM connectors WHERE id = %s", (connector_id,))
                 return cur.rowcount > 0
 
     def _convert_correlation(self, row: Dict[str, Any]) -> Dict[str, Any]:

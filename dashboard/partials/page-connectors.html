@@ -1,0 +1,148 @@
+      <!-- Page: Connectors -->
+      <div id="page-connectors" style="display:none">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Connectors</div>
+            <div class="page-subtitle">Connect external services to receive alerts and create tickets</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.25rem">
+
+          <!-- Slack Card -->
+          <div class="scan-form-card" id="connector-slack-card">
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+              <div style="width:36px;height:36px;border-radius:8px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.1rem">
+                <i class="fab fa-slack" style="color:#4a154b"></i>
+              </div>
+              <div style="flex:1">
+                <div style="font-family:var(--sans);font-size:0.95rem;font-weight:600;color:var(--text)">Slack</div>
+                <div style="font-size:0.72rem;color:var(--text-dim)">Post findings and scan alerts to a channel</div>
+              </div>
+              <span id="slack-status-badge" class="connector-badge connector-badge--disconnected">Disconnected</span>
+            </div>
+
+            <div id="slack-form">
+              <div class="form-group" style="margin-bottom:0.75rem">
+                <label class="form-label">Incoming Webhook URL
+                  <span style="color:var(--text-dim);font-weight:400;margin-left:0.25rem">(write-only)</span>
+                </label>
+                <input
+                  class="form-input"
+                  id="slack-webhook-url"
+                  type="password"
+                  placeholder="https://hooks.slack.com/services/…"
+                  autocomplete="new-password"
+                  maxlength="500"
+                />
+                <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.35rem">
+                  Create a webhook at <span style="color:var(--blue)">api.slack.com/apps</span> → Incoming Webhooks. Never share this URL.
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom:1rem">
+                <label class="form-label">Default Channel <span style="color:var(--text-dim);font-weight:400">(optional override)</span></label>
+                <input
+                  class="form-input"
+                  id="slack-channel"
+                  type="text"
+                  placeholder="#security-alerts"
+                  maxlength="100"
+                />
+              </div>
+
+              <div style="display:flex;gap:0.5rem;align-items:center">
+                <button class="btn-primary" id="slack-save-btn" onclick="saveConnector('slack')">Save</button>
+                <button class="btn-secondary" id="slack-test-btn" onclick="testConnector('slack')" style="display:none">Send Test</button>
+                <button class="btn-secondary" id="slack-disconnect-btn" onclick="disconnectConnector('slack')" style="display:none;color:var(--red);border-color:var(--red)">Disconnect</button>
+                <span id="slack-hint" style="font-size:0.72rem;color:var(--text-dim)"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- JIRA Card -->
+          <div class="scan-form-card" id="connector-jira-card">
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+              <div style="width:36px;height:36px;border-radius:8px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.1rem">
+                <i class="fab fa-jira" style="color:#0052cc"></i>
+              </div>
+              <div style="flex:1">
+                <div style="font-family:var(--sans);font-size:0.95rem;font-weight:600;color:var(--text)">Jira</div>
+                <div style="font-size:0.72rem;color:var(--text-dim)">Auto-create tickets for reachable vulnerabilities</div>
+              </div>
+              <span id="jira-status-badge" class="connector-badge connector-badge--disconnected">Disconnected</span>
+            </div>
+
+            <div id="jira-form">
+              <div class="form-group" style="margin-bottom:0.75rem">
+                <label class="form-label">Jira Base URL</label>
+                <input
+                  class="form-input"
+                  id="jira-base-url"
+                  type="url"
+                  placeholder="https://yourorg.atlassian.net"
+                  maxlength="256"
+                />
+              </div>
+
+              <div class="form-group" style="margin-bottom:0.75rem">
+                <label class="form-label">Account Email</label>
+                <input
+                  class="form-input"
+                  id="jira-email"
+                  type="email"
+                  placeholder="you@yourorg.com"
+                  maxlength="254"
+                  autocomplete="username"
+                />
+              </div>
+
+              <div class="form-group" style="margin-bottom:0.75rem">
+                <label class="form-label">API Token
+                  <span style="color:var(--text-dim);font-weight:400;margin-left:0.25rem">(write-only)</span>
+                </label>
+                <input
+                  class="form-input"
+                  id="jira-api-token"
+                  type="password"
+                  placeholder="Generate at id.atlassian.com/manage-profile/security/api-tokens"
+                  autocomplete="new-password"
+                  maxlength="500"
+                />
+                <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.35rem">
+                  Tokens are stored server-side and never returned to the browser.
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom:1rem">
+                <label class="form-label">Default Project Key</label>
+                <input
+                  class="form-input"
+                  id="jira-project-key"
+                  type="text"
+                  placeholder="SEC"
+                  maxlength="32"
+                />
+              </div>
+
+              <div style="display:flex;gap:0.5rem;align-items:center">
+                <button class="btn-primary" id="jira-save-btn" onclick="saveConnector('jira')">Save</button>
+                <button class="btn-secondary" id="jira-test-btn" onclick="testConnector('jira')" style="display:none">Test Connection</button>
+                <button class="btn-secondary" id="jira-disconnect-btn" onclick="disconnectConnector('jira')" style="display:none;color:var(--red);border-color:var(--red)">Disconnect</button>
+                <span id="jira-hint" style="font-size:0.72rem;color:var(--text-dim)"></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Info callout -->
+        <div style="margin-top:1.25rem;padding:0.85rem 1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);display:flex;gap:0.75rem;align-items:flex-start">
+          <i class="fas fa-circle-info" style="color:var(--blue);margin-top:0.1rem;flex-shrink:0"></i>
+          <div style="font-size:0.75rem;color:var(--text-dim);line-height:1.6">
+            Credentials are stored server-side and <strong style="color:var(--text)">never returned to the browser</strong> after saving.
+            Existing values are shown as <code style="color:var(--green)">***</code> — re-enter only when rotating.
+            Only admins can view or modify connectors.
+          </div>
+        </div>
+      </div>

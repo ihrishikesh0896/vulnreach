@@ -1701,3 +1701,14 @@ body::after {
 .fixplan-upgrade .cur{color:var(--red)}.fixplan-upgrade .arr{color:var(--text-mute)}.fixplan-upgrade .next{color:var(--green)}
 .fixplan-cves{display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.3rem}
 .fixplan-cve-label{font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);margin-bottom:.2rem}
+
+/* ─── Connector badges ──────────────────────────────────────────────────── */
+.connector-badge{display:inline-block;font-size:.65rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;padding:.2rem .55rem;border-radius:99px;border:1px solid;line-height:1.4}
+.connector-badge--connected{color:var(--green);border-color:var(--green);background:var(--green-dim)}
+.connector-badge--disconnected{color:var(--text-dim);border-color:var(--border);background:transparent}
+
+/* ─── Tool execution-state pills (scan overview) ────────────────────────── */
+.tool-state{display:inline-block;font-size:.62rem;font-family:var(--mono);padding:.15rem .45rem;border-radius:99px;border:1px solid;line-height:1.5;margin:.1rem .15rem .1rem 0;white-space:nowrap}
+.tool-state--ran{color:var(--green);border-color:var(--green);background:var(--green-dim)}
+.tool-state--skipped{color:var(--text-dim);border-color:var(--border);background:transparent}
+.tool-state--errored{color:var(--amber);border-color:#f5a62330;background:var(--amber-dim)}

@@ -16,3 +16,7 @@ scan:
 risk:
   exposure: public
   data_sensitivity: high
+
+
+notifications:
+  slack: true

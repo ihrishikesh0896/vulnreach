@@ -162,6 +162,12 @@ class SQLiteRepository(StorageRepository):
         CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
         CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
         CREATE INDEX IF NOT EXISTS idx_api_keys_key_prefix ON api_keys(key_prefix);
+
+        CREATE TABLE IF NOT EXISTS connectors (
+            id TEXT PRIMARY KEY,
+            config TEXT NOT NULL DEFAULT '{}',
+            updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
         """
         with self._conn() as conn:
             conn.executescript(ddl)
@@ -511,6 +517,31 @@ class SQLiteRepository(StorageRepository):
                 "DELETE FROM api_keys WHERE id=? AND user_id=?",
                 (key_id, user_id),
             )
+        return cur.rowcount > 0
+
+    # ── Connectors ────────────────────────────────────────────────────
+
+    def get_connector(self, connector_id: str) -> Optional[Dict[str, Any]]:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT config FROM connectors WHERE id=?", (connector_id,)
+            ).fetchone()
+        if not row:
+            return None
+        return _p(row["config"]) or {}
+
+    def upsert_connector(self, connector_id: str, config: Dict[str, Any]) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                """INSERT INTO connectors (id, config, updated_at)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET config=excluded.config, updated_at=excluded.updated_at""",
+                (connector_id, _j(config), _now_iso()),
+            )
+
+    def delete_connector(self, connector_id: str) -> bool:
+        with self._conn() as conn:
+            cur = conn.execute("DELETE FROM connectors WHERE id=?", (connector_id,))
         return cur.rowcount > 0
 
     # ── Shared helpers ────────────────────────────────────────────────

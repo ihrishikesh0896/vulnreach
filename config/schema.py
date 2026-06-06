@@ -78,6 +78,17 @@ class ScanSettings(BaseModel):
 
 
 
+class NotificationSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Per-connector toggle (opt-out). Defaults to on — every scan notifies the
+    # connector if it is configured under the Connectors page. Set to false to
+    # suppress. Credentials live server-side, never in this file. If the
+    # connector has no webhook configured, the notifier silently no-ops.
+    slack: bool = True
+    jira: bool = False
+
+
 class RiskSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -108,6 +119,7 @@ class ScanConfig(BaseModel):
     scan: ScanSettings
     risk: RiskSettings = RiskSettings()
     policy: PolicySettings = PolicySettings()
+    notifications: NotificationSettings = NotificationSettings()
 
 
 def load_config(path: str) -> ScanConfig:
