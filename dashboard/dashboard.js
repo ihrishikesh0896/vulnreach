@@ -26,6 +26,7 @@ const PARTIALS = [
   ['_p-page-settings',  'partials/page-settings.html'],
   ['_p-page-inventory', 'partials/page-inventory.html'],
   ['_p-page-findings',  'partials/page-findings.html'],
+  ['_p-page-connectors','partials/page-connectors.html'],
   ['_p-panel',          'partials/panel-detail.html'],
   ['_p-modal-explain',  'partials/modal-explain.html'],
   ['_p-modal-graph',    'partials/modal-graph.html'],
@@ -171,7 +172,6 @@ function doLogout() {
 
 // ─── State ─────────────────────────────────────────────────────────────────
 let scans = [];
-let selectedTools = new Set(['trivy','tainter','python_reachability']);
 let currentScan = null;
 let currentTab = 'overview';
 let autoRefreshInterval = null;
@@ -263,7 +263,11 @@ policy:
   # - severity: CRITICAL
   #   verdict: CONFIRMED
   # - severity: HIGH
-  #   verdict: CONFIRMED`;
+  #   verdict: CONFIRMED
+
+notifications:
+  slack: true            # on by default — set false to suppress; no-op if connector unconfigured
+  jira: false            # (Jira ticket creation — not yet wired)`;
 
 function _hlYaml(raw) {
   return raw
@@ -591,7 +595,6 @@ async function copyLastApiKey() {
 // ─── Init ──────────────────────────────────────────────────────────────────
 async function initApp() {
   applyTheme(_theme);  // re-run now that #theme-btn exists in the DOM
-  buildToolChips();
   buildToolsPage();
   buildConfigPage();
   buildSettingsPage();
@@ -614,7 +617,7 @@ loadPartials().then(initApp).catch(err => {
 });
 
 // ─── Navigation ────────────────────────────────────────────────────────────
-const PAGES = ['scans','repo','new','tools','api','config','findings','settings','inventory'];
+const PAGES = ['scans','repo','new','tools','api','config','findings','settings','inventory','connectors'];
 
 function setPage(id) {
   PAGES.forEach(p => {
@@ -631,6 +634,7 @@ function setPage(id) {
   if (id === 'config') buildConfigPage();
   if (id === 'settings') buildSettingsPage();
   if (id === 'inventory') renderInventory();
+  if (id === 'connectors') initConnectors();
 }
 
 // ─── API helpers ───────────────────────────────────────────────────────────
@@ -1169,21 +1173,6 @@ function updateStats() {
   document.getElementById('stat-likely').textContent    = done.length ? likely    : '—';
 }
 
-// ─── Tool chips ────────────────────────────────────────────────────────────
-function buildToolChips() {
-  const wrap = document.getElementById('tool-chips');
-  wrap.innerHTML = Object.keys(TOOL_DEFS).map(t => `
-    <div class="tool-chip ${selectedTools.has(t)?'selected':''}" onclick="toggleTool('${t}',this)">
-      <span class="chip-dot"></span>${t}
-    </div>
-  `).join('');
-}
-
-function toggleTool(name, el) {
-  if (selectedTools.has(name)) { selectedTools.delete(name); el.classList.remove('selected'); }
-  else { selectedTools.add(name); el.classList.add('selected'); }
-}
-
 // ─── Tools page ────────────────────────────────────────────────────────────
 function buildToolsPage() {
   const grid = document.getElementById('tools-grid');
@@ -1204,6 +1193,8 @@ async function launchScan() {
 
   if (!repo_path && !repo_url) { showHint('Provide a repo path or URL'); return; }
   if (!repo_url && !config_path) { showHint('Config path is required for local repo scans'); return; }
+  // Tools are resolved server-side from the repo's vulnreach.yaml (auto-discovered)
+  // or the built-in default config — the UI no longer selects tools.
 
   const btn = document.getElementById('launch-btn');
   btn.disabled = true;
@@ -1214,7 +1205,6 @@ async function launchScan() {
   try {
     const body = {
       config_path,
-      tools: [...selectedTools],
       ...(repo_path ? { repo_path } : {}),
       ...(repo_url  ? { repo_url  } : {}),
     };
@@ -1234,8 +1224,6 @@ async function launchScan() {
 
 function resetForm() {
   ['f-repo-path','f-repo-url','f-config-path'].forEach(id => document.getElementById(id).value='');
-  selectedTools = new Set(['trivy','tainter','python_reachability']);
-  buildToolChips();
   hideProgress();
 }
 
@@ -1387,9 +1375,28 @@ function setTab(name, el) {
 }
 
 function renderPanelOverview(scan) {
-  const failedBanner = scan.failed_tools && scan.failed_tools.length
+  // Tools actually used are derived server-side from real agent execution
+  // (analysis_coverage), reflecting the repo's auto-discovered config — not a
+  // UI selection. Fall back to the metadata tool list for older/in-flight scans.
+  const cov       = scan.analysis_coverage || {};
+  const ran       = cov.tools_ran || [];
+  const skipped   = cov.tools_skipped || {};   // { tool: reason }
+  const errored   = cov.tools_errored || {};   // { tool: error }
+  const skippedKeys = Object.keys(skipped);
+  const erroredKeys = Object.keys(errored);
+
+  const toolsHtml = ran.length || skippedKeys.length || erroredKeys.length
+    ? [
+        ...ran.map(t => `<span class="tool-state tool-state--ran" title="ran">${escHtml(t)}</span>`),
+        ...skippedKeys.map(t => `<span class="tool-state tool-state--skipped" title="skipped: ${escHtml(skipped[t])}">${escHtml(t)} · skipped</span>`),
+        ...erroredKeys.map(t => `<span class="tool-state tool-state--errored" title="error: ${escHtml(errored[t])}">${escHtml(t)} · error</span>`),
+      ].join(' ')
+    : ((scan.tools||[]).join(', ') || '—');
+
+  const degradedKeys = [...skippedKeys, ...erroredKeys];
+  const failedBanner = degradedKeys.length
     ? `<div style="margin-top:1rem;padding:0.6rem 0.75rem;background:var(--amber-dim);border:1px solid #f5a62330;border-radius:4px;font-size:0.7rem;color:var(--amber)">
-        ⚠ ${scan.failed_tools.length} tool(s) skipped: <strong>${scan.failed_tools.join(', ')}</strong> — results may be incomplete
+        ⚠ ${degradedKeys.length} tool(s) did not contribute: <strong>${degradedKeys.join(', ')}</strong> — results may be incomplete
       </div>`
     : '';
 
@@ -1399,7 +1406,7 @@ function renderPanelOverview(scan) {
       <div class="meta-item"><div class="meta-key">Status</div><div class="meta-val"><span class="badge-status ${scan.status||'pending'}"><span class="s-dot"></span>${scan.status||'—'}</span></div></div>
       <div class="meta-item"><div class="meta-key">Repository</div><div class="meta-val">${scan.repo_path||scan.repo_url||'—'}</div></div>
       <div class="meta-item"><div class="meta-key">Started</div><div class="meta-val">${fmtDate(scan.started_at)||'—'}</div></div>
-      <div class="meta-item"><div class="meta-key">Tools</div><div class="meta-val">${(scan.tools||[]).join(', ')||'—'}</div></div>
+      <div class="meta-item"><div class="meta-key">Tools used</div><div class="meta-val">${toolsHtml}</div></div>
       <div class="meta-item"><div class="meta-key">Packages</div><div class="meta-val">${pkgSummaryHtml(scan.pkg_count, scan.sev_breakdown, scan.status)}</div></div>
     </div>
     ${failedBanner}
@@ -1983,3 +1990,129 @@ if (typeof mermaid !== 'undefined') {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeExplainModal(); closeGraphModal(); }
 });
+
+// ─── Connectors ────────────────────────────────────────────────────────────
+
+const _CONNECTOR_IDS = ['slack', 'jira'];
+
+async function initConnectors() {
+  for (const id of _CONNECTOR_IDS) _setConnectorHint(id, '');
+  try {
+    const data = await apiFetch('/connectors');
+    _CONNECTOR_IDS.forEach(id => _applyConnectorState(id, data[id] || {}));
+  } catch (e) {
+    _CONNECTOR_IDS.forEach(id => _setConnectorHint(id, 'Could not load connector state.'));
+  }
+}
+
+function _applyConnectorState(id, state) {
+  const connected = state.connected === true;
+  const badge = document.getElementById(`${id}-status-badge`);
+  const testBtn = document.getElementById(`${id}-test-btn`);
+  const discBtn = document.getElementById(`${id}-disconnect-btn`);
+
+  if (badge) {
+    badge.textContent = connected ? 'Connected' : 'Disconnected';
+    badge.className = `connector-badge connector-badge--${connected ? 'connected' : 'disconnected'}`;
+  }
+  if (testBtn) testBtn.style.display = connected ? '' : 'none';
+  if (discBtn) discBtn.style.display = connected ? '' : 'none';
+
+  // Populate non-secret fields; never pre-fill secrets
+  if (id === 'slack') {
+    const ch = document.getElementById('slack-channel');
+    if (ch && state.channel) ch.value = state.channel;
+  }
+  if (id === 'jira') {
+    const url = document.getElementById('jira-base-url');
+    const email = document.getElementById('jira-email');
+    const proj = document.getElementById('jira-project-key');
+    if (url && state.base_url) url.value = state.base_url;
+    if (email && state.email) email.value = state.email;
+    if (proj && state.project_key) proj.value = state.project_key;
+  }
+}
+
+function _setConnectorHint(id, msg, isError) {
+  const el = document.getElementById(`${id}-hint`);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--red)' : 'var(--text-dim)';
+}
+
+async function saveConnector(id) {
+  const btn = document.getElementById(`${id}-save-btn`);
+  _setConnectorHint(id, '');
+
+  let body = {};
+  if (id === 'slack') {
+    const webhookUrl = document.getElementById('slack-webhook-url').value.trim();
+    const channel    = document.getElementById('slack-channel').value.trim();
+    if (!webhookUrl) { _setConnectorHint(id, 'Webhook URL is required.', true); return; }
+    body = { webhook_url: webhookUrl, channel };
+  } else if (id === 'jira') {
+    const baseUrl    = document.getElementById('jira-base-url').value.trim();
+    const email      = document.getElementById('jira-email').value.trim();
+    const apiToken   = document.getElementById('jira-api-token').value.trim();
+    const projectKey = document.getElementById('jira-project-key').value.trim();
+    if (!baseUrl)    { _setConnectorHint(id, 'Base URL is required.', true); return; }
+    if (!email)      { _setConnectorHint(id, 'Email is required.', true); return; }
+    if (!apiToken)   { _setConnectorHint(id, 'API token is required.', true); return; }
+    if (!projectKey) { _setConnectorHint(id, 'Project key is required.', true); return; }
+    body = { base_url: baseUrl, email, api_token: apiToken, project_key: projectKey };
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const data = await apiFetch(`/connectors/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    _applyConnectorState(id, data);
+    // Clear secret fields after successful save — they must not linger in the DOM
+    if (id === 'slack') document.getElementById('slack-webhook-url').value = '';
+    if (id === 'jira')  document.getElementById('jira-api-token').value = '';
+    _setConnectorHint(id, 'Saved.');
+    setTimeout(() => _setConnectorHint(id, ''), 3000);
+  } catch (e) {
+    _setConnectorHint(id, e.message || 'Save failed.', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+}
+
+async function testConnector(id) {
+  _setConnectorHint(id, 'Sending test…');
+  try {
+    await apiFetch(`/connectors/${id}/test`, { method: 'POST' });
+    _setConnectorHint(id, 'Test sent successfully.');
+    setTimeout(() => _setConnectorHint(id, ''), 4000);
+  } catch (e) {
+    _setConnectorHint(id, e.message || 'Test failed.', true);
+  }
+}
+
+async function disconnectConnector(id) {
+  if (!confirm(`Remove the ${id.charAt(0).toUpperCase() + id.slice(1)} connector? This cannot be undone.`)) return;
+  _setConnectorHint(id, 'Disconnecting…');
+  try {
+    await apiFetch(`/connectors/${id}`, { method: 'DELETE' });
+    _applyConnectorState(id, { connected: false });
+    // Clear all fields for this connector
+    if (id === 'slack') {
+      document.getElementById('slack-webhook-url').value = '';
+      document.getElementById('slack-channel').value = '';
+    }
+    if (id === 'jira') {
+      ['jira-base-url','jira-email','jira-api-token','jira-project-key'].forEach(f => {
+        document.getElementById(f).value = '';
+      });
+    }
+    _setConnectorHint(id, 'Disconnected.');
+    setTimeout(() => _setConnectorHint(id, ''), 3000);
+  } catch (e) {
+    _setConnectorHint(id, e.message || 'Disconnect failed.', true);
+  }
+}

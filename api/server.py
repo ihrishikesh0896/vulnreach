@@ -12,7 +12,8 @@ import asyncio
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+import re as _re
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -24,6 +25,7 @@ from api.auth import (
     create_token,
     hash_api_key,
     hash_password,
+    require_admin,
     require_user,
     set_api_key_validator,
     verify_api_key,
@@ -320,8 +322,11 @@ async def start_scan(
     else:
         config = default_config()
 
-    requested_tools = payload.get("tools")
-    tools = list(requested_tools if requested_tools else (config.scan.tools or []))
+    # Tools are no longer selected from the UI — they come from the resolved
+    # config (an explicit config_path, or default_config for URL scans). For URL
+    # scans the git agent later auto-discovers the repo's vulnreach.yaml and the
+    # runner re-resolves tools from it; the stored metadata is refreshed then.
+    tools = list(config.scan.tools or [])
 
     # Auto-inject dynamic_reachability if runtime is enabled and not already present
     if config.scan.runtime.enabled and "dynamic_reachability" not in tools:
@@ -565,6 +570,197 @@ async def export_scan_pdf(scan_id: str, principal: UserPrincipal = Depends(requi
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── Connectors ──────────────────────────────────────────────────
+
+_ALLOWED_CONNECTORS = {"slack", "jira"}
+
+# Masks all stored secrets — nothing sensitive is ever returned to the browser.
+def _mask_connector(connector_id: str, cfg: dict) -> dict:
+    if connector_id == "slack":
+        return {
+            "connected": bool(cfg.get("webhook_url")),
+            "channel": cfg.get("channel", ""),
+        }
+    if connector_id == "jira":
+        return {
+            "connected": bool(cfg.get("api_token")),
+            "base_url": cfg.get("base_url", ""),
+            "email": cfg.get("email", ""),
+            "project_key": cfg.get("project_key", ""),
+        }
+    return {"connected": False}
+
+
+_HTTPS_RE = _re.compile(r'^https://', _re.IGNORECASE)
+
+
+class SlackConnectorRequest(BaseModel):
+    webhook_url: str
+    channel: str = ""
+
+    @field_validator("webhook_url")
+    @classmethod
+    def _validate_webhook(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) > 500:
+            raise ValueError("webhook_url too long")
+        if not _HTTPS_RE.match(v):
+            raise ValueError("webhook_url must start with https://")
+        return v
+
+    @field_validator("channel")
+    @classmethod
+    def _validate_channel(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) > 100:
+            raise ValueError("channel too long")
+        return v
+
+
+class JiraConnectorRequest(BaseModel):
+    base_url: str
+    email: str
+    api_token: str
+    project_key: str
+
+    @field_validator("base_url")
+    @classmethod
+    def _validate_base_url(cls, v: str) -> str:
+        v = v.strip().rstrip("/")
+        if len(v) > 256:
+            raise ValueError("base_url too long")
+        if not _HTTPS_RE.match(v):
+            raise ValueError("base_url must start with https://")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) > 254:
+            raise ValueError("email too long")
+        if "@" not in v:
+            raise ValueError("email must contain @")
+        return v
+
+    @field_validator("api_token")
+    @classmethod
+    def _validate_token(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("api_token is required")
+        if len(v) > 500:
+            raise ValueError("api_token too long")
+        return v
+
+    @field_validator("project_key")
+    @classmethod
+    def _validate_project_key(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not v:
+            raise ValueError("project_key is required")
+        if len(v) > 32:
+            raise ValueError("project_key too long")
+        if not _re.match(r'^[A-Z][A-Z0-9_]*$', v):
+            raise ValueError("project_key must be alphanumeric (e.g. SEC)")
+        return v
+
+
+@app.get("/connectors")
+async def list_connectors(principal: UserPrincipal = Depends(require_admin)):
+    result = {}
+    for cid in _ALLOWED_CONNECTORS:
+        cfg = storage.get_connector(cid) or {}
+        result[cid] = _mask_connector(cid, cfg)
+    return result
+
+
+@app.post("/connectors/slack")
+async def save_slack_connector(
+    body: SlackConnectorRequest,
+    principal: UserPrincipal = Depends(require_admin),
+):
+    cfg = {"webhook_url": body.webhook_url, "channel": body.channel}
+    storage.upsert_connector("slack", cfg)
+    _audit.info("connector_saved connector=slack user=%s", principal.username)
+    return _mask_connector("slack", cfg)
+
+
+@app.post("/connectors/jira")
+async def save_jira_connector(
+    body: JiraConnectorRequest,
+    principal: UserPrincipal = Depends(require_admin),
+):
+    cfg = {
+        "base_url": body.base_url,
+        "email": body.email,
+        "api_token": body.api_token,
+        "project_key": body.project_key,
+    }
+    storage.upsert_connector("jira", cfg)
+    _audit.info("connector_saved connector=jira user=%s", principal.username)
+    return _mask_connector("jira", cfg)
+
+
+@app.post("/connectors/{connector_id}/test")
+async def test_connector(
+    connector_id: str,
+    principal: UserPrincipal = Depends(require_admin),
+):
+    if connector_id not in _ALLOWED_CONNECTORS:
+        raise HTTPException(status_code=404, detail="Unknown connector")
+    cfg = storage.get_connector(connector_id)
+    if not cfg:
+        raise HTTPException(status_code=409, detail="Connector not configured")
+
+    import httpx
+
+    if connector_id == "slack":
+        webhook_url = cfg.get("webhook_url", "")
+        if not webhook_url:
+            raise HTTPException(status_code=409, detail="Connector not configured")
+        payload = {"text": "✅ VulnReach test message — Slack connector is working."}
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(webhook_url, json=payload)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Slack returned {resp.status_code}")
+        _audit.info("connector_tested connector=slack user=%s", principal.username)
+        return {"ok": True}
+
+    if connector_id == "jira":
+        import base64
+        base_url  = cfg.get("base_url", "").rstrip("/")
+        email     = cfg.get("email", "")
+        api_token = cfg.get("api_token", "")
+        creds = base64.b64encode(f"{email}:{api_token}".encode()).decode()
+        headers = {
+            "Authorization": f"Basic {creds}",
+            "Accept": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{base_url}/rest/api/3/myself", headers=headers)
+        if resp.status_code == 401:
+            raise HTTPException(status_code=502, detail="Jira authentication failed — check email and API token")
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Jira returned {resp.status_code}")
+        _audit.info("connector_tested connector=jira user=%s", principal.username)
+        return {"ok": True}
+
+    raise HTTPException(status_code=404, detail="Unknown connector")
+
+
+@app.delete("/connectors/{connector_id}")
+async def delete_connector(
+    connector_id: str,
+    principal: UserPrincipal = Depends(require_admin),
+):
+    if connector_id not in _ALLOWED_CONNECTORS:
+        raise HTTPException(status_code=404, detail="Unknown connector")
+    storage.delete_connector(connector_id)
+    _audit.info("connector_deleted connector=%s user=%s", connector_id, principal.username)
+    return {"connector_id": connector_id, "deleted": True}
 
 
 # ── Public endpoints ─────────────────────────────────────────────

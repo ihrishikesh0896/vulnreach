@@ -45,3 +45,6 @@ policy:
       verdict: CONFIRMED
     - severity: HIGH
       verdict: CONFIRMED
+
+notifications:
+  slack: true
