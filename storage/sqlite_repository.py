@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from storage.repository import StorageRepository
+from storage.repository import StorageRepository, evidence_with_package
 
 
 def _now_iso() -> str:
@@ -245,7 +245,7 @@ class SQLiteRepository(StorageRepository):
                 item.get("priority"),
                 item.get("confidence", 0.1),
                 item.get("finding_type") or item.get("evidence_type"),
-                _j(item.get("evidence") or {}),
+                _j(evidence_with_package(item)),
             )
             for item in results
         ]

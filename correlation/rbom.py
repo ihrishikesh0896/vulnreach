@@ -154,10 +154,13 @@ def build_rbom(
             comp.direct = bool(c["direct"])
 
     for f in findings or []:
-        name = f.get("package") or f.get("package_name") or f.get("name")
+        # correlation rows carry the package inside `evidence` (no top-level
+        # column), so fall back to _field which reads the evidence blob.
+        name = (f.get("package") or f.get("package_name") or f.get("name")
+                or _field(f, "package") or _field(f, "package_name"))
         if not name:
             continue
-        _get(str(name), f.get("ecosystem")).absorb(f)
+        _get(str(name), f.get("ecosystem") or _field(f, "ecosystem")).absorb(f)
 
     comps = [c.as_dict() for c in by_key.values()]
     comps.sort(key=lambda x: (-_VERDICT_RANK.get(x["verdict"], 0), x["name"].lower()))

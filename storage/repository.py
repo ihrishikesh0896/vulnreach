@@ -16,6 +16,21 @@ except ImportError:  # pragma: no cover - handled at runtime
     RealDictCursor = None
 
 
+def evidence_with_package(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Evidence blob for a correlation row with the package folded in.
+
+    correlation_results has no `package` column, so a correlation item's
+    top-level package would be lost on persist — leaving the merged verdict with
+    no way to say which package it is for (fine for CVE-bucketed views, but the
+    RBOM keys by component). Carry it inside the evidence JSON instead.
+    """
+    evidence = dict(item.get("evidence") or {})
+    package = item.get("package") or item.get("package_name")
+    if package and not evidence.get("package"):
+        evidence["package"] = package
+    return evidence
+
+
 class StorageRepository(ABC):
     @abstractmethod
     def create_scan(self, status: str = "started", metadata: Optional[Dict[str, Any]] = None) -> str:
@@ -429,7 +444,7 @@ class PostgresRepository(StorageRepository):
                 item.get("priority"),
                 item.get("confidence", 0.1),
                 item.get("finding_type") or item.get("evidence_type"),  # prefer new field
-                Json(item.get("evidence") or {}),
+                Json(evidence_with_package(item)),
             )
             for item in results
         ]

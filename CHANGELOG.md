@@ -62,6 +62,17 @@
 
 ### Fixed
 
+#### Correlation results silently dropped the package name on persist
+- `correlation_results` has no `package` column and `store_correlation` (both Postgres and SQLite)
+  persisted only `item["evidence"]`, so a merged verdict's package was lost on write. Invisible until
+  the RBOM, which keys by component: a real end-to-end pipeline scan produced an RBOM where all 77
+  findings failed to attach (0 vulnerable, everything NOT_OBSERVED) because their package could not
+  be recovered. Fixed with a shared `storage.evidence_with_package` that folds the top-level package
+  into the evidence JSON in both backends; `build_rbom` also reads the package from the evidence blob.
+  After the fix the same scan yields a correct RBOM (12 vulnerable, Flask/requests reachable, CVEs
+  attributed — Pillow 26, cryptography 13, Werkzeug 9). This was found by *running the product's own
+  pipeline*, not a unit test.
+
 #### Transitive reachability was a silent no-op in production — now sourced from lockfiles
 - Transitive reachability (a vulnerable dep reached through a used package → POSSIBLE, added
   2026-08-06) never fired in a real scan. The agent read the dependency graph from

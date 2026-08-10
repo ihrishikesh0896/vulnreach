@@ -181,6 +181,27 @@ def test_rbom_from_scan_seeds_full_inventory_including_non_vulnerable():
     assert rbom["summary"]["total_components"] == 3
 
 
+def test_rbom_reads_package_from_evidence_blob():
+    """correlation_results has no `package` column — the package rides inside the
+    evidence JSON (see storage.evidence_with_package). The RBOM must group by it,
+    or every finding is silently dropped (the bug a live pipeline scan exposed)."""
+    rbom = build_rbom([{
+        "cve_id": "CVE-1", "verdict": "LIKELY", "evidence_type": "static",
+        "evidence": {"package": "flask", "import_detected": True},
+    }])
+    assert {c["name"] for c in rbom["components"]} == {"flask"}
+    assert rbom["components"][0]["verdict"] == "LIKELY"
+    assert rbom["components"][0]["cve_ids"] == ["CVE-1"]
+
+
+def test_evidence_with_package_folds_top_level_package():
+    from storage.repository import evidence_with_package
+    assert evidence_with_package({"package": "flask", "evidence": {"x": 1}}) == {"x": 1, "package": "flask"}
+    # an existing evidence.package is not overwritten
+    assert evidence_with_package({"package": "other", "evidence": {"package": "keep"}})["package"] == "keep"
+    assert evidence_with_package({"evidence": {}}) == {}
+
+
 def test_empty_scan_produces_valid_empty_rbom():
     rbom = build_rbom([])
     assert rbom["summary"]["total_components"] == 0
