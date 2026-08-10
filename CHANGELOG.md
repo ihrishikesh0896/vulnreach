@@ -4,6 +4,23 @@
 
 ### Added
 
+#### Transitive reachability from container metadata (runtime back-stop, Node)
+- Added a second transitive source: the target app's *installed* dependency graph, read from the
+  container the runtime path already has (`/proc/<pid>/root`). This complements the lockfile source
+  — it exists even for a repo that ships no lockfile — and back-stops the eBPF observer: a vulnerable
+  package that never loaded during the traffic window but is reachable through the dependency graph
+  from a package that *did* load is structurally reachable, so it becomes **POSSIBLE** (with a
+  `reachable_via` chain) instead of NOT_OBSERVED. This is additive, not redundant — the observer
+  reports what *ran* (empirical, LIKELY/CONFIRMED); this reports what is *present and structurally
+  reachable* but unobserved (POSSIBLE), which matters most when traffic coverage is partial or
+  dependencies load lazily.
+- `requires_graph_from_container` reads npm `node_modules/*/package.json` (scoped + nested handled);
+  wired through `to_reachability_findings` (new `requires_graph` arg — the loaded packages are the
+  closure roots) and built in `observer_runner`. **Node only for now:** npm's package name is
+  consistent across the install dir, manifest, and vuln feed, so the graph and the observer's reached
+  set share a namespace. Python (dist-vs-import name) and Java (pom parsing) need name reconciliation
+  and are deferred.
+
 #### Transitive reachability for Node (npm package-lock.json)
 - Extended transitive reachability — a vulnerable dependency reached through a used package →
   POSSIBLE with a parent chain — to JavaScript. `requires_graph_from_lockfile` is now

@@ -26,6 +26,7 @@ from agents.ebpf.target_resolver import DockerTargetResolver
 from agents.ebpf.observer_client import ObserverClient, _DEFAULT_BIN
 from agents.ebpf.package_index import build_index
 from agents.ebpf.reachability import correlate_opens
+from agents.reachability.transitive import requires_graph_from_container
 from agents.ebpf.verdict_integration import (
     to_reachability_findings,
     taint_modules as _taint_modules,
@@ -200,7 +201,18 @@ async def run_observer_reachability(
 
     reach = correlate_opens(events, index,
                             traffic_start_ns=window.start_ns if window else None)
-    findings = to_reachability_findings(reach, vulnerabilities, import_map, taint_flows)
+    # Transitive back-stop from the container's installed dependency graph: a
+    # vulnerable package reachable via a *loaded* one but not itself observed
+    # loading is structurally reachable (POSSIBLE), not absent. Node only for now
+    # (its package name is namespace-consistent); Python/Java need name
+    # reconciliation. Guarded on a Node package actually having loaded — with no
+    # Node roots there is nothing to reach through, so we skip the container walk
+    # entirely on pure-Python/Java targets.
+    reached_node = "node" in ecosystems and any(
+        pr.ecosystem == "node" for pr in reach.values())
+    requires_graph = requires_graph_from_container(container_root, "node") if reached_node else {}
+    findings = to_reachability_findings(reach, vulnerabilities, import_map,
+                                        taint_flows, requires_graph=requires_graph)
 
     metadata = {
         "engine": "observer",

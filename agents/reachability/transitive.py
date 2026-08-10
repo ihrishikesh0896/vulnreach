@@ -194,6 +194,58 @@ def _node_lockfile_graph(repo_path: str) -> Dict[str, Set[str]]:
     return graph
 
 
+def requires_graph_from_container(container_root: str, ecosystem: str = "node") -> Dict[str, Set[str]]:
+    """Dependency graph from the target app's *installed* packages in a container.
+
+    Complements the lockfile source: the runtime path has the container root
+    (``/proc/<pid>/root``) with every dependency installed, so the graph exists
+    even for a repo that ships no lockfile. Used to back-stop the eBPF observer —
+    a vulnerable dependency that is installed and reachable via a *loaded*
+    package, but that did not itself load during the traffic window, becomes
+    POSSIBLE rather than NOT_OBSERVED.
+
+    Node only for now: npm's package name is consistent across the install dir,
+    package.json, and the vuln feed, so the graph and the observer's reached set
+    share a namespace. Python (dist-vs-import) and Java (pom parsing) need name
+    reconciliation and are not handled here yet.
+    """
+    eco = (ecosystem or "").strip().lower()
+    if eco in ("node", "javascript", "js", "typescript"):
+        return _node_modules_graph(container_root)
+    return {}
+
+
+def _node_modules_graph(container_root: str, max_depth: int = 12) -> Dict[str, Set[str]]:
+    import json
+
+    graph: Dict[str, Set[str]] = {}
+    root = container_root.rstrip("/")
+    base_depth = root.count("/")
+    for dirpath, dirs, files in os.walk(root):
+        if dirpath.count("/") - base_depth > max_depth:
+            dirs[:] = []
+            continue
+        dirs[:] = [d for d in dirs if d not in ("proc", "sys", "dev")]
+        # A package's own manifest lives directly inside a node_modules/<pkg>/.
+        if "package.json" not in files or os.sep + "node_modules" not in dirpath:
+            continue
+        try:
+            with open(os.path.join(dirpath, "package.json"), encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        name = data.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        deps: Set[str] = set()
+        for key in ("dependencies", "optionalDependencies"):
+            d = data.get(key)
+            if isinstance(d, dict):
+                deps.update(_norm(k) for k in d)
+        graph.setdefault(_norm(name), set()).update(deps)
+    return graph
+
+
 def requires_graph_from_env() -> Dict[str, Set[str]]:
     """Fallback graph from the *current* interpreter's installed packages.
 

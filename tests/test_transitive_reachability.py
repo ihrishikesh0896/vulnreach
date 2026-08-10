@@ -200,6 +200,64 @@ def test_agent_requires_graph_uses_lockfile_not_scanner_env(tmp_path):
         "agent did not read the repo lockfile for the transitive graph"
 
 
+# ── Container-metadata source (runtime back-stop) ─────────────────────────────
+
+def test_requires_graph_from_container_node_modules(tmp_path):
+    """Node graph from an installed node_modules tree (the runtime source).
+
+    Works even when the repo ships no lockfile, and handles scoped packages.
+    """
+    from agents.reachability.transitive import requires_graph_from_container
+
+    for name, deps in [("express", {"accepts": "1"}),
+                       ("accepts", {"mime-types": "1"}),
+                       ("@scope/util", {"lodash": "1"})]:
+        d = tmp_path / "app" / "node_modules"
+        for seg in name.split("/"):
+            d = d / seg
+        d.mkdir(parents=True)
+        (d / "package.json").write_text(json.dumps({"name": name, "dependencies": deps}))
+    graph = requires_graph_from_container(str(tmp_path), "node")
+    assert graph["express"] == {"accepts"}
+    assert graph["@scope/util"] == {"lodash"}
+
+
+def test_container_transitive_backstop_in_verdict_integration():
+    """A vulnerable dep that never loaded but is reachable via a LOADED package
+    becomes POSSIBLE (structural), not NOT_OBSERVED. The observer's reached set
+    is the closure root."""
+    from agents.ebpf.reachability import PackageReach, POTENTIALLY_REACHABLE
+    from agents.ebpf.verdict_integration import to_reachability_findings
+
+    reach = {"node:express": PackageReach(
+        name="express", ecosystem="node", version="4",
+        verdict=POTENTIALLY_REACHABLE, rule="R1")}
+    graph = {"express": {"accepts"}}
+    vulns = [
+        {"package": "express", "cve_id": ["CVE-E"]},   # loaded
+        {"package": "accepts", "cve_id": ["CVE-A"]},   # not loaded, dep of express
+        {"package": "left-pad", "cve_id": ["CVE-L"]},  # not loaded, unreachable
+    ]
+    by_pkg = {f.package: f for f in
+              to_reachability_findings(reach, vulns, requires_graph=graph)}
+    assert by_pkg["express"].verdict == "LIKELY"           # observed loading
+    assert by_pkg["accepts"].verdict == "POSSIBLE"         # structural back-stop
+    assert by_pkg["accepts"].reachable_via == ["express", "accepts"]
+    assert by_pkg["left-pad"].verdict == "NOT_OBSERVED"    # neither observed nor reachable
+
+
+def test_container_backstop_noop_without_graph():
+    """Without a container graph, an unloaded vuln stays NOT_OBSERVED (unchanged)."""
+    from agents.ebpf.reachability import PackageReach, POTENTIALLY_REACHABLE
+    from agents.ebpf.verdict_integration import to_reachability_findings
+
+    reach = {"node:express": PackageReach(name="express", ecosystem="node",
+                                          version="4", verdict=POTENTIALLY_REACHABLE, rule="R1")}
+    f = to_reachability_findings(reach, [{"package": "accepts", "cve_id": ["C"]}])[0]
+    assert f.verdict == "NOT_OBSERVED"
+    assert f.reachable_via is None
+
+
 def test_requires_graph_from_site_packages_parses_metadata(tmp_path):
     """The graph reader must handle the real METADATA header shape.
 

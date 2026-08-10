@@ -34,6 +34,7 @@ from correlation.engine import dynamic_reachability_verdict
 from agents.utils.import_resolver import resolve_import_name as _resolve_import_name
 from agents.ebpf.package_index import _norm
 from agents.ebpf.reachability import PackageReach, CONFIRMED_REACHABLE
+from agents.reachability.transitive import transitive_paths
 
 # Confidence values kept identical to coverage_correlator for consistency.
 _CONF_NATIVE_EXEC = 0.8   # R2: native code mapped PROT_EXEC (redesign §6)
@@ -81,6 +82,7 @@ def to_reachability_findings(
     vulnerabilities: list[dict],
     import_map: Optional[dict[str, str]] = None,
     taint_flows: Optional[list[dict]] = None,
+    requires_graph: Optional[dict] = None,
 ) -> list[ReachabilityFinding]:
     """Produce canonical ReachabilityFindings from eBPF PackageReach results.
 
@@ -91,12 +93,22 @@ def to_reachability_findings(
                          PyPI dist names to the import names the observer sees
         taint_flows:     optional static taint flows (ScanContext.taint_flows) for
                          Rule R4 — runtime load + static path to the package ⇒ CONFIRMED
+        requires_graph:  optional dependency graph (from the container's installed
+                         metadata) for the transitive back-stop: a vuln that never
+                         loaded but is reachable via a *loaded* package ⇒ POSSIBLE.
     """
     tainted = taint_modules(taint_flows)
     # Index reached packages by normalized name for dist/import-name matching.
     by_name: dict[str, PackageReach] = {}
     for pr in reach.values():
         by_name[_norm(pr.name)] = pr
+
+    # Transitive back-stop: the loaded packages are the roots; anything reachable
+    # from them through the dependency graph is structurally reachable even if it
+    # did not load during the observation window.
+    transitive: dict = {}
+    if requires_graph:
+        transitive = transitive_paths(by_name.keys(), requires_graph)
 
     findings: list[ReachabilityFinding] = []
     for vuln in vulnerabilities:
@@ -131,6 +143,17 @@ def to_reachability_findings(
             verdict = dynamic_reachability_verdict(has_taint, loaded)
             confidence = _VERDICT_CONF.get(verdict, _CONF_NOT_OBSERVED)
 
+        # Structural back-stop: a vuln that produced no runtime/taint evidence
+        # (NOT_OBSERVED) but is reachable through the dependency graph from a
+        # package that DID load is present-and-reachable — POSSIBLE, not absent.
+        reachable_via = None
+        if verdict == "NOT_OBSERVED":
+            chain = transitive.get(_norm(import_name)) or transitive.get(_norm(pypi))
+            if chain:
+                verdict = "POSSIBLE"
+                confidence = _VERDICT_CONF.get("POSSIBLE", _CONF_TAINT_ONLY)
+                reachable_via = chain
+
         for cve in _cve_list(vuln):
             findings.append(ReachabilityFinding(
                 cve_id=cve,
@@ -143,5 +166,6 @@ def to_reachability_findings(
                 confidence=confidence,
                 evidence_type="dynamic",
                 files=list(pr.evidence)[:5] if loaded else [],
+                reachable_via=reachable_via,
             ))
     return findings
