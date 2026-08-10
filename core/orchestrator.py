@@ -150,7 +150,13 @@ class Orchestrator:
                     verdict = reachability_verdict(
                         import_detected=item.get("import_detected", False),
                         call_chain_exists=item.get("call_chain_exists", False),
-                        sink_reachable=False,  # static path never sets sink_reachable
+                        # The static reachability agents now ground sink_reachable
+                        # in a source→sink taint path (tainter cross-reference), so
+                        # honour it: import + call chain + taint ⇒ CONFIRMED, per
+                        # the canonical reachability_verdict rule. Hardcoding False
+                        # here silently discarded the agents' taint grounding and
+                        # capped every static finding at LIKELY.
+                        sink_reachable=item.get("sink_reachable", False),
                     )
                     static_candidate = {
                         **item,

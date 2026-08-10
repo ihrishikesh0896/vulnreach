@@ -8,6 +8,7 @@ from correlation.engine import (
     dynamic_reachability_verdict,
     evidence_basis_from_signals,
     priority_from_score,
+    reachability_verdict,
     risk_score,
 )
 
@@ -92,6 +93,15 @@ class CorrelationService:
                     (dyn and dyn.get("import_detected"))
                     or (sta and sta.get("import_detected"))
                 )
+                # Taint-grounded sink: the static agents cross-reference tainter's
+                # source→sink path and set sink_reachable on the finding. Carry it
+                # through so a static import + call chain + confirmed taint sink can
+                # reach CONFIRMED, per the canonical reachability_verdict rule —
+                # rather than being capped at LIKELY.
+                sink_reachable: bool = bool(
+                    (dyn and dyn.get("sink_reachable"))
+                    or (sta and sta.get("sink_reachable"))
+                )
                 evidence_type: str = (
                     (dyn or {}).get("evidence_type")
                     or (sta or {}).get("evidence_type")
@@ -123,9 +133,20 @@ class CorrelationService:
                     confidence = min(0.99, base_conf * 1.10) if sta else base_conf
                     finding_type = "dynamic"
                 elif reachability_class == "STATICALLY_REACHABLE":
-                    if call_chain_exists and import_detected:
-                        verdict = "LIKELY"
-                    else:
+                    # Canonical rule (shared with the reachability agents and eBPF
+                    # verdict integration): import + call chain + taint-grounded sink
+                    # ⇒ CONFIRMED; import + call chain ⇒ LIKELY; import only ⇒ POSSIBLE.
+                    verdict = reachability_verdict(
+                        import_detected=import_detected,
+                        call_chain_exists=call_chain_exists,
+                        sink_reachable=sink_reachable,
+                    )
+                    # classify_reachability already proved static reachability from
+                    # file/function/call-chain evidence — which does not require the
+                    # import flag. The canonical rule floors import-less findings at
+                    # NOT_OBSERVED, so raise that floor: a STATICALLY_REACHABLE
+                    # finding is at minimum POSSIBLE.
+                    if verdict == "NOT_OBSERVED":
                         verdict = "POSSIBLE"
                     confidence = (sta or {}).get("confidence") or confidence_from_verdict(verdict)
                     finding_type = "static"
