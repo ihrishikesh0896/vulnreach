@@ -33,6 +33,7 @@ from vulnreach.scan_response import augment_scan_response
 from core.orchestrator import Orchestrator
 from config.schema import load_config, default_config
 from correlation.service import CorrelationService
+from correlation.rbom import rbom_from_scan, to_cyclonedx
 from storage import get_repository
 
 # Load .env.local first (secrets), then .env as fallback
@@ -360,6 +361,23 @@ async def start_scan(
 async def get_scan(scan_id: str, principal: UserPrincipal = Depends(require_user)):
     scan = _fetch_scan_owned(scan_id, principal)
     return {"scan_id": scan_id, **augment_scan_response(scan)}
+
+
+@app.get("/scan/{scan_id}/rbom")
+async def get_rbom(scan_id: str, format: str = "json",
+                   principal: UserPrincipal = Depends(require_user)):
+    """Reachability Bill of Materials — the scan's components keyed by package,
+    each with its reachability verdict and layered evidence.
+
+    ``format=json`` (default) returns the native RBOM; ``format=cyclonedx``
+    returns CycloneDX 1.5 with reachability encoded as VEX analysis state.
+    """
+    scan = _fetch_scan_owned(scan_id, principal)
+    scan.setdefault("scan_id", scan_id)
+    rbom = rbom_from_scan(scan)
+    if format.lower() in ("cyclonedx", "cdx"):
+        return to_cyclonedx(rbom)
+    return rbom
 
 
 @app.post("/scan/{scan_id}/cancel")

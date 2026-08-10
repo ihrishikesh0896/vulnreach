@@ -4,6 +4,24 @@
 
 ### Added
 
+#### RBOM — Reachability Bill of Materials (per project)
+- **`correlation/rbom.py`** — a component-keyed view of a scan: every relevant package with one
+  reachability verdict and the layered evidence behind it (static: import/call-chain/sink; dynamic:
+  loaded/executed; transitive: `reachable_via` chain), the CVEs it carries, version, and
+  direct-vs-transitive. Where an SBOM says *what is present* and the scan's per-CVE response says
+  *which vulnerabilities are reachable*, the RBOM says, *for each component, is it reachable and how
+  do we know* — the consumable that unifies the whole reachability pipeline. `build_rbom` groups the
+  scan's merged findings by package (strongest verdict wins, evidence layers union), with an optional
+  inventory to include non-vulnerable components; the summary surfaces the actionable
+  `reachable_and_vulnerable` count.
+- **CycloneDX 1.5 export** — `to_cyclonedx` renders the RBOM with reachability encoded as VEX
+  analysis state (CONFIRMED/LIKELY → `exploitable`, POSSIBLE → `in_triage`, NOT_OBSERVED →
+  `not_affected` + `code_not_reachable`), purls per ecosystem, and the raw verdict/evidence as
+  `vulnreach:*` component properties so nothing is lost to non-VEX consumers. This is a first step
+  toward the long-standing SBOM-export roadmap gap.
+- **`GET /scan/{id}/rbom`** (`?format=json|cyclonedx`) exposes it, via a shared `rbom_from_scan`
+  helper so the API and package/local mode produce an identical RBOM. 10 tests.
+
 #### Transitive reachability from container metadata (runtime back-stop, Node)
 - Added a second transitive source: the target app's *installed* dependency graph, read from the
   container the runtime path already has (`/proc/<pid>/root`). This complements the lockfile source
