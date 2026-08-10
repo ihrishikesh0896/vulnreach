@@ -11,9 +11,13 @@
   direct-vs-transitive. Where an SBOM says *what is present* and the scan's per-CVE response says
   *which vulnerabilities are reachable*, the RBOM says, *for each component, is it reachable and how
   do we know* — the consumable that unifies the whole reachability pipeline. `build_rbom` groups the
-  scan's merged findings by package (strongest verdict wins, evidence layers union), with an optional
-  inventory to include non-vulnerable components; the summary surfaces the actionable
-  `reachable_and_vulnerable` count.
+  scan's merged findings by package (strongest verdict wins, evidence layers union); the summary
+  surfaces the actionable `reachable_and_vulnerable` count.
+- **Full component inventory.** Trivy now runs with `--list-all-pkgs`, and `rbom_from_scan` seeds the
+  RBOM from every detected package (`components_from_trivy` maps Trivy's package Type → ecosystem and
+  its `Relationship` → direct/indirect), so **non-vulnerable components appear too** (as
+  NOT_OBSERVED) — the RBOM is a full SBOM annotated with reachability, not just the vulnerable subset.
+  Validated on real Trivy output (20 components off `labs/python_vuln_app`'s requirements).
 - **CycloneDX 1.5 export** — `to_cyclonedx` renders the RBOM with reachability encoded as VEX
   analysis state (CONFIRMED/LIKELY → `exploitable`, POSSIBLE → `in_triage`, NOT_OBSERVED →
   `not_affected` + `code_not_reachable`), purls per ecosystem, and the raw verdict/evidence as

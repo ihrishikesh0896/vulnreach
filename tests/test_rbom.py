@@ -1,7 +1,9 @@
 """RBOM — Reachability Bill of Materials assembly and CycloneDX export."""
 from __future__ import annotations
 
-from correlation.rbom import build_rbom, rbom_from_scan, to_cyclonedx
+from correlation.rbom import (
+    build_rbom, components_from_trivy, rbom_from_scan, to_cyclonedx,
+)
 
 
 def _f(package, verdict, etype="static", **kw):
@@ -128,6 +130,55 @@ def test_rbom_from_scan_uses_correlation_and_project_metadata():
     assert rbom["project"] == {"name": "demo-app", "repo": "https://x/demo", "scan_id": "s-123"}
     assert rbom["summary"]["reachable_and_vulnerable"] == 1
     assert {c["name"] for c in rbom["components"]} == {"flask", "lodash"}
+
+
+# ── full inventory from Trivy --list-all-pkgs ─────────────────────────────────
+
+def test_components_from_trivy_maps_type_and_relationship():
+    raw = {"Results": [
+        {"Type": "pip", "Packages": [
+            {"Name": "flask", "Version": "2.0.1", "Relationship": "direct"},
+            {"Name": "werkzeug", "Version": "2.0.1", "Relationship": "indirect"}]},
+        {"Type": "npm", "Packages": [{"Name": "lodash", "Version": "4.17.0"}]},
+    ]}
+    comps = {c["name"]: c for c in components_from_trivy(raw)}
+    assert comps["flask"] == {"name": "flask", "version": "2.0.1",
+                              "ecosystem": "python", "direct": True}
+    assert comps["werkzeug"]["direct"] is False
+    assert comps["lodash"]["ecosystem"] == "node"
+    assert comps["lodash"]["direct"] is None   # no Relationship → unknown
+
+
+def test_components_from_trivy_empty_without_list_all_pkgs():
+    # No Packages arrays (flag not used) → no inventory, not an error.
+    assert components_from_trivy({"Results": [{"Type": "pip", "Vulnerabilities": []}]}) == []
+    assert components_from_trivy(None) == []
+
+
+def test_rbom_from_scan_seeds_full_inventory_including_non_vulnerable():
+    """The plumbing: Trivy's full package list makes non-vulnerable components
+    appear in the RBOM (as NOT_OBSERVED), turning it into an SBOM+reachability."""
+    scan = {
+        "scan_id": "s1", "repo_name": "demo",
+        "raw": {"trivy": {"Results": [{"Type": "pip", "Packages": [
+            {"Name": "flask", "Version": "2.0.1", "Relationship": "direct"},
+            {"Name": "werkzeug", "Version": "2.0.1", "Relationship": "indirect"},
+            {"Name": "lxml", "Version": "4.6.3", "Relationship": "direct"},  # not vulnerable
+        ]}]}},
+        "correlation": [
+            _f("flask", "CONFIRMED", ecosystem="python", cve_id="CVE-1"),
+        ],
+    }
+    rbom = rbom_from_scan(scan)
+    comps = {c["name"]: c for c in rbom["components"]}
+    # every declared package is present, not only the vulnerable/analysed one
+    assert set(comps) == {"flask", "werkzeug", "lxml"}
+    assert comps["flask"]["verdict"] == "CONFIRMED"
+    assert comps["lxml"]["verdict"] == "NOT_OBSERVED"     # inventory-only, no CVE
+    assert comps["lxml"]["cve_ids"] == []
+    assert comps["lxml"]["ecosystem"] == "python"          # ecosystem from Trivy seed
+    assert comps["lxml"]["direct"] is True
+    assert rbom["summary"]["total_components"] == 3
 
 
 def test_empty_scan_produces_valid_empty_rbom():

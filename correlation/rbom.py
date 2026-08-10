@@ -184,19 +184,65 @@ def build_rbom(
     }
 
 
+# Trivy package-type → our ecosystem label (for the full-inventory seed).
+_TRIVY_TYPE_ECO = {
+    "pip": "python", "poetry": "python", "pipenv": "python", "python-pkg": "python",
+    "uv": "python", "conda": "python",
+    "npm": "node", "yarn": "node", "pnpm": "node", "node-pkg": "node", "bun": "node",
+    "gomod": "go", "gobinary": "go",
+    "pom": "java", "gradle": "java", "jar": "java", "sbt": "java",
+    "composer": "php", "composer-installed": "php",
+    "nuget": "csharp", "dotnet-core": "csharp", "packages-props": "csharp",
+    "gemspec": "ruby", "bundler": "ruby", "cargo": "rust",
+}
+
+
+def components_from_trivy(raw: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Full component inventory from a Trivy `--list-all-pkgs` JSON result.
+
+    Reads every ``Results[].Packages[]`` (all detected packages, not just
+    vulnerable ones), mapping Trivy's package Type to an ecosystem and its
+    ``Relationship`` to a direct/indirect flag. Returns [] for output produced
+    without ``--list-all-pkgs`` (no Packages arrays) — the RBOM then simply
+    covers only the analysed components.
+    """
+    if not isinstance(raw, dict):
+        return []
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+    for result in raw.get("Results") or []:
+        eco = _TRIVY_TYPE_ECO.get(str(result.get("Type") or "").lower())
+        for pkg in result.get("Packages") or []:
+            name = pkg.get("Name")
+            if not name:
+                continue
+            key = (_norm(name), eco)
+            if key in seen:
+                continue
+            seen.add(key)
+            rel = str(pkg.get("Relationship") or "").lower()
+            direct = (True if rel in ("direct", "root", "workspace")
+                      else False if rel == "indirect" else None)
+            out.append({"name": name, "version": pkg.get("Version"),
+                        "ecosystem": eco, "direct": direct})
+    return out
+
+
 def rbom_from_scan(scan: Dict[str, Any]) -> Dict[str, Any]:
     """Build an RBOM from a stored scan dict (the shape storage.get_scan returns).
 
     Shared by the API endpoint and package/local mode so both surfaces produce
-    an identical RBOM. Uses the scan's merged reachability findings
-    (``correlation``) as the component evidence.
+    an identical RBOM. Seeds the full component inventory from Trivy's
+    ``--list-all-pkgs`` output so non-vulnerable packages appear too, then layers
+    the scan's merged reachability findings (``correlation``) on top.
     """
     project = {
         "name": scan.get("repo_name") or scan.get("repo_url") or scan.get("scan_id"),
         "repo": scan.get("repo_url"),
         "scan_id": scan.get("scan_id") or scan.get("id"),
     }
-    return build_rbom(scan.get("correlation") or [], project=project)
+    components = components_from_trivy((scan.get("raw") or {}).get("trivy"))
+    return build_rbom(scan.get("correlation") or [], components=components, project=project)
 
 
 # ── CycloneDX (VEX) export ────────────────────────────────────────────────────

@@ -55,6 +55,10 @@ class TrivyAgent(BaseTool):
             "fs",
             "--format",
             "json",
+            # Emit every detected package, not just vulnerable ones, so the RBOM
+            # can present a full component inventory (Results[].Packages[], each
+            # tagged with a Relationship of direct/indirect).
+            "--list-all-pkgs",
             str(repo_path),
         ]
         try:
