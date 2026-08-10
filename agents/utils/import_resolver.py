@@ -28,6 +28,22 @@ from typing import Dict, Optional
 # Only needed where the names genuinely differ. Alphabetical for readability.
 # ---------------------------------------------------------------------------
 _PYPI_TO_IMPORT: Dict[str, str] = {
+    # Web frameworks and common libs whose import name is not a mechanical
+    # transform of the distribution name (added after live crAPI validation, which
+    # exposed djangorestframework -> rest_framework as a silent reachability miss).
+    "djangorestframework": "rest_framework",
+    "djangorestframework-simplejwt": "rest_framework_simplejwt",
+    "django-cors-headers": "corsheaders",
+    "django-filter": "django_filters",
+    "django-extensions": "django_extensions",
+    "graphene-django": "graphene_django",
+    "flask-cors": "flask_cors",
+    "flask-sqlalchemy": "flask_sqlalchemy",
+    "pycryptodome": "Crypto",
+    "pycryptodomex": "Cryptodome",
+    "websocket-client": "websocket",
+    "msgpack-python": "msgpack",
+    "python-ldap": "ldap",
     # A
     "attrs": "attr",
     "azure-identity": "azure.identity",
@@ -82,6 +98,13 @@ _PYPI_TO_IMPORT: Dict[str, str] = {
     # W
     "werkzeug": "werkzeug",
 }
+
+# resolve_import_name looks up by ``name.lower().replace("-", "_")``, so any
+# curated key written with a hyphen would never match (it was compared against an
+# underscore-normalised key). 28 entries were dead this way — e.g. scikit-learn
+# never resolved to sklearn, opencv-python never to cv2 — silently falling back
+# to the mechanical heuristic. Normalise the keys once so every entry is live.
+_PYPI_TO_IMPORT = {k.replace("-", "_"): v for k, v in _PYPI_TO_IMPORT.items()}
 
 
 def _build_runtime_import_map() -> Dict[str, str]:
