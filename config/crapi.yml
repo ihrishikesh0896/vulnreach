@@ -1,0 +1,33 @@
+# crAPI (OWASP "completely ridiculous API") — multi-language target.
+# crAPI spans Java (Spring Boot), Python (Flask), Go and Node services, so this
+# uses multi_language_reachability instead of the single-language python agent.
+# Static-only by default: crAPI's full runtime is a multi-container compose stack,
+# which the single-container runtime mode does not spin up — keep runtime off.
+#
+# Use it in the UI by setting Config Path to one of:
+#   /app/config/crapi.yml            (this file — mounted via ./config)
+# or commit a `vulnreach.yaml` at the crAPI repo root and leave Config Path empty
+# (auto-discovered for repo_url scans).
+scan:
+  static_reachability: true
+  tools:
+    - git                          # auto-injected for repo_url scans
+    - trivy                        # SCA across every ecosystem (Java/Python/Go/Node)
+    - tainter                      # taint analysis — source -> sink
+    - multi_language_reachability  # monorepo-aware static reachability, all languages
+    - route_extractor              # HTTP route map (Flask / FastAPI / Django)
+    - metadata                     # PyPI -> importable name resolution
+
+  runtime:
+    enabled: false                 # multi-service stack — static analysis only
+
+risk:
+  exposure: public                 # crAPI is an internet-facing API by design
+  data_sensitivity: high           # holds PII / vehicle / payment data
+
+policy:
+  block_if:                        # fail CI on reachable, confirmed high/critical
+    - severity: CRITICAL
+      verdict: CONFIRMED
+    - severity: HIGH
+      verdict: CONFIRMED

@@ -1,0 +1,19 @@
+# Minimal static PoC config — single-language Python app (labs/python_vuln_app).
+# Static-only: no Docker daemon / runtime profile required.
+# In the container this file is available at: /app/config/poc.yml
+scan:
+  static_reachability: true
+  tools:
+    - trivy                # SCA — finds the CVEs (required)
+    - tainter              # taint analysis — user input -> vulnerable sink
+    - python_reachability  # AST call-chain reachability
+
+  runtime:
+    enabled: false         # static only — no runtime coverage for this PoC
+
+risk:
+  exposure: public         # affects risk scoring
+  data_sensitivity: high
+
+policy:
+  block_if: []             # no CI gate for the PoC

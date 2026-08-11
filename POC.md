@@ -15,6 +15,9 @@ from the noise.
 (user input → vulnerable sink, taint-grounded), while packages that are declared
 but not exercised drop to the bottom.
 
+Then you'll graduate to **crAPI** — a real multi-language target — and see where
+[`vulnreach.yaml`](#understanding-vulnreachyaml) config comes in.
+
 ---
 
 ## Before you start
@@ -77,10 +80,19 @@ curl -s http://localhost:8000/health     # {"status":"ok","boot_id":"..."}
    ```
 
    *(This is the path **inside the server container**, where the bundled app
-   lives. Leave Repository URL and Config Path empty.)*
-3. **Tools** — make sure these three chips are on (the defaults):
-   `trivy`, `tainter`, `python_reachability`.
-4. Click **▶ Launch Scan**. A progress bar appears; the scan runs in the
+   lives. Leave Repository URL empty.)*
+3. In **Config Path**, enter:
+
+   ```
+   /app/config/poc.yml
+   ```
+
+   *(A config path is **required for local-path scans**. `config/poc.yml` ships
+   with the repo — a minimal static config; see
+   [Understanding vulnreach.yaml](#understanding-vulnreachyaml) for what's in it.)*
+4. **Tools** — the config already selects `trivy`, `tainter`,
+   `python_reachability`; make sure those chips are on.
+5. Click **▶ Launch Scan**. A progress bar appears; the scan runs in the
    background.
 
 > **Why these three:** `trivy` finds the CVEs, `python_reachability` builds the
@@ -150,6 +162,131 @@ curl -s "http://localhost:8000/scan/<scan_id>/rbom?format=cyclonedx" \
 
 ---
 
+## Scan crAPI — a real multi-language target
+
+`python_vuln_app` proves the mechanics on one small Python app. **crAPI**
+([OWASP crAPI](https://github.com/OWASP/crAPI) — "completely ridiculous API") is
+the realistic next step: a deliberately-vulnerable **multi-service** app spanning
+**Java (Spring Boot), Python (Flask), Go and Node**. It's the case where a custom
+`vulnreach.yaml` earns its keep.
+
+Because crAPI lives in an external repo, you scan it **by URL** and point at a
+config tailored for a polyglot codebase. `config/crapi.yml` ships with this repo
+for exactly this.
+
+1. Sidebar → **New Scan**.
+2. **Repository URL (remote):**
+
+   ```
+   https://github.com/OWASP/crAPI
+   ```
+
+   Leave **Repository Path** empty.
+3. **Config Path:**
+
+   ```
+   /app/config/crapi.yml
+   ```
+
+4. **Tools** — `config/crapi.yml` selects the polyglot set: `trivy`, `tainter`,
+   `multi_language_reachability`, `route_extractor`, `metadata` (`git` is
+   auto-added for URL scans). Confirm those chips.
+5. **▶ Launch Scan**, then follow the same **Scans → open panel → Findings** flow
+   as before.
+
+**What to expect:** Trivy inventories CVEs across all four ecosystems;
+`multi_language_reachability` + `tainter` then separate the packages actually
+reached by crAPI's services from the long tail of transitive/dev dependencies.
+Build/lint-only tooling (e.g. `black`) correctly lands in the deprioritised
+buckets rather than the actionable set. crAPI is large, so this scan takes longer
+than the lab app.
+
+> **Runtime note:** crAPI's live behaviour is a multi-container `docker compose`
+> stack, which VulnReach's single-container runtime mode does not stand up — so
+> `config/crapi.yml` keeps `runtime.enabled: false` and relies on static
+> reachability. That's the right default here.
+
+> **Alternative — auto-discovered config:** for a repo you control, commit a
+> `vulnreach.yaml` at the **repo root** and leave Config Path empty. For `repo_url`
+> scans VulnReach auto-uses that file; if none exists it falls back to a built-in
+> default. (Local **path** scans always require an explicit Config Path.)
+
+---
+
+## Understanding `vulnreach.yaml`
+
+`vulnreach.yaml` (any name works when you pass it as Config Path; the special
+name `vulnreach.yaml` at a repo root is what URL scans auto-discover) controls
+which tools run and how findings are scored. It has four top-level blocks. Here's
+a fully-annotated reference — everything not shown has a sensible default, and
+**every tool degrades gracefully** if unavailable.
+
+```yaml
+scan:
+  static_reachability: true      # master switch for static reachability analysis
+  tools:                          # which agents run (order-independent)
+    - git                         #   clones repo_url scans (auto-injected for URLs)
+    - trivy                       #   SCA — the CVE inventory (the only required tool)
+    - tainter                     #   taint analysis: user input -> vulnerable sink
+    - python_reachability         #   Python AST call-chain reachability (single-language)
+    - multi_language_reachability #   polyglot call-chain reachability (Java/Python/Go/Node)
+    - route_extractor             #   HTTP route map (Flask / FastAPI / Django)
+    - metadata                    #   resolves PyPI dist name -> importable module name
+    # - semgrep                   #   optional SAST (uncomment to enable)
+    # - pytest_coverage           #   optional: run the target's own test suite
+    # - dynamic_reachability      #   runtime coverage (auto-added when runtime.enabled)
+
+  runtime:                        # dynamic (runtime) reachability — OFF by default
+    enabled: false                #   true requires VULNREACH_ALLOW_DOCKER_DAEMON=true
+    timeout: 120                  #   max seconds for container start + traffic
+    coverage_wait: 10             #   seconds to wait before flushing coverage
+    container_port: 3000          #   port the target app listens on in its container
+    ebpf:                         #   experimental syscall tracing (Linux only)
+      enabled: false
+      mode: openat                #   "openat" (portable) | "usdt" (line-level)
+      tracer: bpftrace            #   "bpftrace" | "bcc"
+
+  openapi_generator:              # auto-generate an OpenAPI spec via LLM (optional)
+    enabled: false
+    provider: none                #   "none" | "anthropic" | "openai" | "ollama"
+
+  intelligent_dast:               # LLM-steered DAST — SQLi/SSRF confirmation (optional)
+    enabled: false
+    provider: none                #   "none" keeps it off even if enabled (no lock-in)
+    max_iter: 5
+
+risk:
+  exposure: public                # "public" | "internal" | "private" — raises/lowers risk score
+  data_sensitivity: high          # "low" | "medium" | "high"
+
+policy:
+  block_if: []                    # CI gates — fail the build on matching findings:
+  # - severity: CRITICAL
+  #   verdict: CONFIRMED          #   e.g. block on any reachable, confirmed critical
+  # - severity: HIGH
+  #   verdict: CONFIRMED
+```
+
+**How the blocks map to what you saw:**
+
+| Block | Effect on the scan |
+|---|---|
+| `scan.tools` | The `trivy` + `tainter` + a `*_reachability` combo is what promotes a CVE to **CONFIRMED**. Drop `tainter` and even reached code stays at `LIKELY`. |
+| `scan.static_reachability` | Turn off to get raw SCA (Trivy) with no reachability grading. |
+| `scan.runtime.enabled` | Adds runtime coverage → the strongest **Dynamically Reachable** verdicts. Needs the runtime profile + daemon opt-in (heavier; single-container apps only). |
+| `risk.exposure` / `data_sensitivity` | Feed the risk score and finding priority — not the verdict, the *urgency*. |
+| `policy.block_if` | Turns findings into a **CI/CD gate**. With the rules above, one reachable confirmed HIGH/CRITICAL fails the pipeline. |
+
+**Picking a config:**
+
+| Target shape | Start from | Key differences |
+|---|---|---|
+| Single-language Python (the lab app) | `config/poc.yml` | `python_reachability`, runtime off |
+| Polyglot / microservices (crAPI) | `config/crapi.yml` | `multi_language_reachability`, `route_extractor`, CI gate on |
+| Full reference w/ every option | `config/scan.sample.yml` | runtime + DAST + OpenAPI blocks shown |
+
+---
+
 ## What you just proved
 
 - VulnReach ran a real SCA + reachability pipeline on a live app **from the UI**.
@@ -173,7 +310,8 @@ curl -s "http://localhost:8000/scan/<scan_id>/rbom?format=cyclonedx" \
 | Symptom | Fix |
 |---|---|
 | `New Scan` errors on the path | Use the **in-container** path `/app/labs/python_vuln_app`, not a host path. |
-| Scan finishes with an amber "tools skipped" banner | Expected if a tool isn't present; the tools that ran still produce results. Ensure `trivy`, `tainter`, `python_reachability` are toggled on. |
-| Everything shows `NOT_OBSERVED` | Confirm `tainter` and `python_reachability` were selected — without them there's no reachability evidence to promote findings. |
+| "Config path is required for local repo scans" | Local **path** scans need a Config Path — use `/app/config/poc.yml` (or your own under `/app/config/…`). URL scans can omit it. |
+| Scan finishes with an amber "tools skipped" banner | Expected if a tool isn't present; the tools that ran still produce results. Confirm the reachability tools for your config are toggled on. |
+| Everything shows `NOT_OBSERVED` | Confirm a reachability agent ran — `tainter` + `python_reachability` (Python) or `multi_language_reachability` (polyglot). Without them there's no evidence to promote findings. |
 | Login fails | Re-check the seeded credentials in `.env.local`. |
 | `curl` RBOM returns `401` | Token missing/expired — re-run the token step in Step 7. |
