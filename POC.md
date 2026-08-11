@@ -109,6 +109,11 @@ curl -s http://localhost:8000/health     # {"status":"ok","boot_id":"..."}
   vulnerable, actionable.
 - **Click the scan row** to open the detail panel.
 
+> **Terminal statuses:** `completed` (done, no gate), `blocked` (done — a
+> `policy.block_if` gate matched; **not an error**, results are complete),
+> `partial` (some optional tools were skipped), `failed` (a required tool errored).
+> `blocked`/`partial`/`completed` all have full findings to read.
+
 ---
 
 ## Step 6 — Read the findings
@@ -194,12 +199,23 @@ for exactly this.
 5. **▶ Launch Scan**, then follow the same **Scans → open panel → Findings** flow
    as before.
 
-**What to expect:** Trivy inventories CVEs across all four ecosystems;
+**What to expect:** Trivy inventories CVEs across every ecosystem;
 `multi_language_reachability` + `tainter` then separate the packages actually
 reached by crAPI's services from the long tail of transitive/dev dependencies.
-Build/lint-only tooling (e.g. `black`) correctly lands in the deprioritised
-buckets rather than the actionable set. crAPI is large, so this scan takes longer
-than the lab app.
+crAPI is large, so this scan takes a few minutes (clone + polyglot analysis).
+
+> **Verified run** (against `github.com/OWASP/crAPI`): **1,450 components** across
+> **3 ecosystems** (node 1,380 · python 46 · go 24); 65 vulnerable, **61 reachable**,
+> and **1,389 `NOT_OBSERVED`** — the unreached tail reachability strips out. Only
+> **5 land as `CONFIRMED`** (`djangorestframework`, `requests`, `fastmcp`, `uuid`,
+> `ws`) — that's your fix-first list out of 1,450. Exact counts drift with the
+> Trivy DB; the ratio is the point.
+
+> **This scan ends with status `blocked` — that's success, not an error.**
+> `config/crapi.yml` sets a `policy.block_if` gate, and crAPI has reachable
+> confirmed HIGH/CRITICAL findings, so the pipeline status is `BLOCK` (a CI gate
+> would fail the build here). Open the scan and read its Findings exactly as
+> normal. Remove the `block_if` rules if you don't want the gate.
 
 > **Runtime note:** crAPI's live behaviour is a multi-container `docker compose`
 > stack, which VulnReach's single-container runtime mode does not stand up — so
