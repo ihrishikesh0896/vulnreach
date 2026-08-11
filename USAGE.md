@@ -1,5 +1,8 @@
 # VulnReach Usage Index
 
+**New here?** Start with the [POC.md](POC.md) guide — onboard your first project
+in ~10 minutes, entirely in the UI, against a vulnerable app bundled in the image.
+
 Usage is split into two focused guides:
 
 1. **UI usage** (browser dashboard) — [USAGE_UI.md](USAGE_UI.md)

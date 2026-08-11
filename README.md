@@ -174,6 +174,7 @@ Full methodology, evidence chain detail, and package-level breakdown: [docs/benc
 
 ### Usage
 
+- [POC.md](POC.md) — **first project in ~10 min** — UI-only PoC against a bundled vulnerable app
 - [USAGE_PACKAGE.md](USAGE_PACKAGE.md) — package/CLI installation, dependencies, startup, usage
 - [USAGE_UI.md](USAGE_UI.md) — UI/server installation, dependencies, startup, usage
 
