@@ -1,5 +1,36 @@
 # Changelog
 
+## [Unreleased] — 2026-10-01
+
+### Changed
+
+#### BREAKING: CLI is now lifecycle-only — scanning via UI or `curl`
+- Removed `vulnreach scan`, `fix-plan`, `replay`, `explain`, and the standalone
+  local-pipeline mode (`vulnreach/local.py`, `vulnreach/client.py` — 635 lines).
+  The web UI (`dashboard/`) already covered every one of these end-to-end
+  (starting/cancelling/deleting scans, fix plans, CVE explanations, call-graph
+  replay, RBOM/CycloneDX export), so this removes a second, harder-to-maintain
+  surface without losing capability — it also closes a real gap: `correlation/
+  rbom.py`'s docstring claimed "package/local mode" RBOM support that the CLI
+  never actually had.
+- **New**: `vulnreach start` / `stop` / `reload` / `status` (`vulnreach/lifecycle.py`,
+  `vulnreach/cli/lifecycle.py`) — auto-detects Docker vs. bare-process mode
+  (`docker compose` wrapper, or a pidfile-based `uvicorn` supervisor for
+  `pip install vulnreach[server]`), overridable via `--mode`. That's the entire
+  CLI surface now.
+- **CI/CD gating** — `policy.block_if` gating is unaffected; it was always
+  evaluated server-side (`core/orchestrator.py`), independent of how a scan was
+  triggered. The CLI's `--fail-on` flag was just a polling convenience around
+  it. New doc: [docs/ci-cd-gating.md](docs/ci-cd-gating.md) — the `curl`-based
+  replacement recipe.
+- `USAGE_PACKAGE.md` rewritten around the new install → lifecycle → UI/curl-scan
+  flow. `tests/test_package_parity.py` and `tests/test_cli_scan_warning.py`
+  removed (tested the now-gone surfaces); `tests/test_lifecycle.py` added (22
+  tests covering mode detection, Docker wrapper commands, and process-mode
+  pidfile start/stop/reload).
+
+---
+
 ## [Unreleased] — 2026-05-19
 
 ### Added

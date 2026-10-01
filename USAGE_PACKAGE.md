@@ -1,145 +1,119 @@
 # VulnReach Package Usage
 
-This guide is for the Python package/CLI workflow (`pip install vulnreach`).
+VulnReach runs as a server (API + web UI on one port). This guide is for installing
+and managing that server via `pip install vulnreach` or Docker. **Scanning itself
+happens through the web UI or direct API calls — the CLI only starts, stops, and
+reloads the server.** See [docs/ci-cd-gating.md](docs/ci-cd-gating.md) if you want
+to trigger and gate on scans from a CI pipeline via `curl`.
 
 ---
 
 ## 1. Install
 
-### 1.1 Prerequisites
-- Python `3.11+`
-- `git`
-- `trivy` on PATH
-
-Install Trivy:
-- macOS: `brew install trivy`
-- Debian/Ubuntu: `sudo apt-get install trivy`
-
-### 1.2 Install package
+### 1.1 Docker mode (recommended)
 ```bash
+git clone https://github.com/ihrishikesh0896/vulnreach.git
+cd vulnreach
+cp .env.example .env.local   # set DATABASE_URL, JWT_SECRET, etc.
 pip install vulnreach
+vulnreach start
+```
+`vulnreach start` detects the `docker-compose.yml` in the current directory and
+runs `docker compose up -d` — Trivy, Semgrep, and all other scan-time tooling are
+already baked into the image. Nothing else to install.
+
+### 1.2 Bare process mode
+Use this when you don't want a Docker daemon on the host. The `vulnreach` process
+itself becomes the server, so this host needs the same tooling the Docker image
+normally provides:
+```bash
+pip install vulnreach[server]
+```
+- Python `3.11+`
+- `trivy` on PATH ([install](https://aquasecurity.github.io/trivy/latest/getting-started/installation/))
+- `semgrep` / `tainter` — optional, skipped gracefully if missing
+
+```bash
+vulnreach start   # no docker-compose.yml found -> spawns uvicorn directly
 ```
 
-Verify:
+### 1.3 Verify
 ```bash
 vulnreach --version
 vulnreach --help
 ```
-
-Expected commands:
-- `scan`
-- `fix-plan`
-- `replay`
-- `explain`
+Expected commands: `start`, `stop`, `reload`, `status` — that's the whole CLI surface.
 
 ---
 
-## 2. Dependencies
+## 2. Lifecycle commands
 
-### Required for package mode
-- Python runtime + package deps (installed by `pip install vulnreach`)
-- `trivy`
+| Command | Docker mode | Process mode |
+|---|---|---|
+| `vulnreach start` | `docker compose up -d` | spawns `uvicorn main:app`, writes a pidfile |
+| `vulnreach stop` | `docker compose down` | sends `SIGTERM` to the pidfile'd process |
+| `vulnreach reload` | `docker compose up -d` again (recreates what changed) | stop, then start fresh |
+| `vulnreach status` | `docker compose ps` | reports running/not running + pid |
 
-### Optional (graceful skip if missing)
-- `semgrep`
-- `tainter`
+Mode is auto-detected (a `docker-compose.yml` in the current directory + a reachable
+Docker daemon → Docker mode; otherwise process mode). Force it explicitly with
+`--mode docker` or `--mode process` if you need to override the detection — e.g.
+`--compose-file path/to/other-compose.yml` if it isn't in the current directory.
 
-### Required only for dynamic runtime scanning
-- Docker + Docker Compose
-- Explicit opt-in env:
-  - `VULNREACH_ALLOW_DOCKER_DAEMON=true`
-- If running containerized runtime profile:
-  - `DOCKER_HOST=tcp://docker-socket-proxy:2375` (set by runtime compose profile)
+`reload` is a restart, not a zero-downtime hot-reload — there's a brief gap while
+the container or process comes back up. Use it after editing `.env.local` or
+`config/scan.sample.yml`.
 
----
-
-## 3. Startup Modes
-
-### 3.1 Local standalone mode (default)
-No server URL set:
-```bash
-vulnreach scan --repo-path ./labs/python_vuln_app
-```
-
-Storage:
-- SQLite by default at `~/.vulnreach/vulnreach.db`
-
-Override DB path:
-```bash
-SQLITE_PATH=/tmp/vulnreach.db vulnreach scan --repo-path ./labs/python_vuln_app
-```
-
-### 3.2 Client mode (talk to running server)
-Set URL and token:
-```bash
-export VULNREACH_URL=http://localhost:8000
-export VULNREACH_TOKEN=<jwt>
-```
-
-`VULNREACH_TOKEN` can be either:
-- JWT from `POST /login`, or
-- API token (API key) created via `POST /api-keys` or UI `Settings -> API Keys`.
-
-Then run:
-```bash
-vulnreach scan --repo-url https://github.com/your-org/your-repo --wait
-```
+Process mode's pidfile and log live in `~/.vulnreach/` by default (override with
+`VULNREACH_RUN_DIR`). Note this is separate from `VULNREACH_WORK_DIR`
+(`/tmp/vulnreach` by default), which is the ephemeral per-scan work directory the
+server itself uses — not CLI/server lifecycle state.
 
 ---
 
-## 4. Core Usage
+## 3. Running a scan
 
-### 4.1 Scan
-```bash
-vulnreach scan --repo-path ./labs/python_vuln_app
-```
+Once the server is up (`vulnreach status` shows it running), use **either**:
 
-With policy-style exit behavior:
-```bash
-vulnreach scan --repo-path ./labs/python_vuln_app --fail-on CONFIRMED
-```
-
-### 4.2 Fix plan
-```bash
-vulnreach fix-plan --scan-id <scan_id>
-vulnreach fix-plan --scan-id <scan_id> --format markdown
-vulnreach fix-plan --scan-id <scan_id> --format json
-```
-
-### 4.3 Explain a CVE
-```bash
-vulnreach explain CVE-2021-33503 --scan-id <scan_id>
-```
-
-### 4.4 Replay call graph
-```bash
-vulnreach replay CVE-2021-33503 --scan-id <scan_id>
-vulnreach replay CVE-2021-33503 --scan-id <scan_id> --format mermaid
-```
+- **The web UI** — open `http://localhost:8000`, log in, and start a scan from
+  there. This covers everything: starting/cancelling/deleting scans, fix plans,
+  CVE explanations, call-graph replay, RBOM/CycloneDX export.
+- **`curl` directly against the API** — useful for scripting or CI:
+  ```bash
+  curl -s -X POST http://localhost:8000/scan \
+    -H "Authorization: Bearer $VULNREACH_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"repo_url": "https://github.com/your-org/your-repo"}'
+  ```
+  `$VULNREACH_TOKEN` is a JWT from `POST /login` or an API key created via
+  `POST /api-keys` (or UI → Settings → API Keys). Full endpoint reference:
+  [docs/api.md](docs/api.md). For gating a CI build on scan results specifically,
+  see [docs/ci-cd-gating.md](docs/ci-cd-gating.md).
 
 ---
 
-## 5. Useful Environment Variables
+## 4. Useful Environment Variables
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `SQLITE_PATH` | Local standalone DB path | `~/.vulnreach/vulnreach.db` |
-| `VULNREACH_URL` | Enable client mode | unset |
-| `VULNREACH_TOKEN` | API auth token (JWT or API key) for client mode | unset |
-| `VULNREACH_USERNAME` | Auto-login username (client mode) | unset |
-| `VULNREACH_PASSWORD` | Auto-login password (client mode) | unset |
+| `VULNREACH_RUN_DIR` | CLI pidfile/log location (process mode) | `~/.vulnreach/` |
+| `DATABASE_URL` | Postgres connection string | required (`.env.local`) |
+| `JWT_SECRET` | Auth token signing secret | required (`.env.local`) |
 | `VULNREACH_ALLOW_DOCKER_DAEMON` | Explicit opt-in for dynamic Docker scanning | unset (`false`) |
+| `VULNREACH_ALLOW_EBPF` | Explicit opt-in for eBPF runtime tracing | unset (`false`) |
 | `DOCKER_HOST` | Docker endpoint (runtime profile) | unset |
 
 ---
 
-## 6. Quick Troubleshooting
+## 5. Quick Troubleshooting
 
-- `Error: Provide --repo-path or --repo-url`:
-  - pass one of `--repo-path` or `--repo-url`.
-- `trivy` not found:
-  - install `trivy` and retry.
-- `API error 401` in client mode:
-  - refresh token or set correct `VULNREACH_TOKEN`.
-- Dynamic scan skipped with daemon opt-in reason:
-  - set `VULNREACH_ALLOW_DOCKER_DAEMON=true` intentionally.
+- `vulnreach start` says the server isn't installed:
+  - process mode needs `pip install vulnreach[server]`, not bare `pip install vulnreach`.
+- `vulnreach start` fails with "already running":
+  - check `vulnreach status`; `vulnreach stop` first, or use `vulnreach reload`.
+- `trivy` not found (process mode only):
+  - install it and retry — Docker mode doesn't need this, it's already in the image.
+- `API error 401` from `curl`:
+  - refresh your token or re-create an API key.
+- Dynamic scan skipped with a daemon opt-in reason:
+  - set `VULNREACH_ALLOW_DOCKER_DAEMON=true` intentionally in `.env.local`.
