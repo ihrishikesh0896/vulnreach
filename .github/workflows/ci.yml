@@ -115,6 +115,74 @@ jobs:
         run: |
           pytest -q tests/test_language_fixtures.py tests/test_scan_response_contract.py
 
+  # ── Dependency vulnerability audit + SBOM (ratchet gate) ───────────────────
+  dependency-audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit (JSON report)
+        run: pip-audit -r requirements.txt --format json --output pip-audit-report.json || true
+        # pip-audit exits non-zero whenever it finds anything; we evaluate the
+        # report ourselves below against a ratchet baseline instead of trusting
+        # the raw exit code, so a non-zero exit here is expected, not a failure.
+
+      - name: Generate CycloneDX SBOM
+        run: pip-audit -r requirements.txt --format cyclonedx-json --output sbom.cyclonedx.json || true
+
+      - name: Enforce vulnerability ratchet
+        run: |
+          python3 - <<'PY'
+          import json, sys
+
+          # Ratchet, not a target — same pattern as the coverage gate above.
+          # Baseline is the unique known-vulnerability count measured on
+          # 2026-09-30 via `pip-audit -r requirements.txt`: 93 across 17 of 91
+          # pinned packages (aiohttp, pillow, pyjwt, starlette, cryptography,
+          # etc). CI fails only if that count grows. Lower BASELINE as
+          # dependencies get upgraded and vulnerabilities are resolved; never
+          # raise it just to make a failing build pass.
+          BASELINE = 93
+
+          with open("pip-audit-report.json") as f:
+              data = json.load(f)
+
+          ids = set()
+          for pkg in data.get("dependencies", []):
+              for v in pkg.get("vulns", []):
+                  ids.add(v["id"])
+
+          count = len(ids)
+          print(f"Unique known vulnerabilities: {count} (baseline {BASELINE})")
+          if count > BASELINE:
+              print(
+                  f"::error::Vulnerability count increased ({BASELINE} -> {count}). "
+                  "A newly pinned or updated dependency introduced a known "
+                  "vulnerability. Pin a fixed version, or if unavoidable, "
+                  "lower-bound this check deliberately with a comment explaining why."
+              )
+              sys.exit(1)
+          PY
+
+      - name: Upload audit report + SBOM
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-audit
+          path: |
+            pip-audit-report.json
+            sbom.cyclonedx.json
+
   # ── Docker image build (smoke test) ───────────────────────────────────────
   docker-build:
     name: Docker image build

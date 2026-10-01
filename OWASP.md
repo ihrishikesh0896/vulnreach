@@ -66,7 +66,7 @@ VulnReach is fully functional without any external paid service:
 
 ## Project Leaders
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for maintainer contact information and how to get involved.
+See [GOVERNANCE.md](GOVERNANCE.md) for maintainer contact information, and [CONTRIBUTING.md](CONTRIBUTING.md) for how to get involved.
 
 ---
 

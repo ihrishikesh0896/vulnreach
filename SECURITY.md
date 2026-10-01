@@ -19,7 +19,7 @@ If you discover a security issue in VulnReach itself (not in a target applicatio
 
 1. **GitHub Private Vulnerability Reporting** — Use the [Security tab](../../security/advisories/new) on this repository to submit a draft advisory. This is the preferred channel.
 
-2. **Email** — If you cannot use GitHub, email the maintainers. Include `[SECURITY]` in the subject line. Maintainer contact information is documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+2. **Email** — If you cannot use GitHub, email the maintainers. Include `[SECURITY]` in the subject line. Maintainer contact information is documented in [GOVERNANCE.md](GOVERNANCE.md).
 
 ### What to include
 

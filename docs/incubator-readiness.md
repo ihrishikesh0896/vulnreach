@@ -48,7 +48,9 @@ The AI layer is deliberately scoped to analyst augmentation only. Reviewers may 
 ## OSS Governance
 
 - [x] Apache 2.0 license, contribution guide, security policy.
-- [~] Maintainer rotation/on-call + response SLA documented.
+- [x] Governance model documented (`GOVERNANCE.md`) — currently BDFL, single maintainer.
+- [~] Maintainer rotation/on-call + response SLA documented — targets set in `GOVERNANCE.md`,
+      not yet backed by a funded rotation (one maintainer today).
 - [ ] Versioned support policy and deprecation windows.
 - [ ] Signed release artifacts and provenance (SLSA-style).
 
@@ -56,6 +58,11 @@ The AI layer is deliberately scoped to analyst augmentation only. Reviewers may 
 
 - [x] Lint + unit tests + coverage gate.
 - [x] Deterministic multi-language fixture checks.
+- [x] Dependency vulnerability scan (`pip-audit`) + CycloneDX SBOM generation, ratchet-gated
+      (`dependency-audit` job in `.github/workflows/ci.yml`); weekly `dependabot.yml` updates.
+- [x] Cross-platform unit coverage for `agents/ebpf/` (`package_index.py`, `observer_client.py`)
+      runs without Linux/root/Docker; only the real kernel cgroup-isolation proof
+      (`test_ebpf_observer_p0.py`) is gated, and that gate is correct, not a gap.
 - [ ] End-to-end nightly scan suite with pinned vulnerable fixtures.
 - [ ] Performance regression baseline (large monorepo fixture).
 
@@ -63,5 +70,7 @@ The AI layer is deliberately scoped to analyst augmentation only. Reviewers may 
 
 1. Add artifact attestation/signing for scan outputs.
 2. Add end-to-end nightly fixture scans with time budgets and flake tracking.
-3. Publish maintainer/SLA policy in `CONTRIBUTING.md`.
+3. ~~Publish maintainer/SLA policy in `CONTRIBUTING.md`.~~ Done — see `GOVERNANCE.md`.
 4. Add ADRs for dynamic runtime trust-boundary decisions.
+5. Work down the `dependency-audit` ratchet baseline (93 unique known vulnerabilities across 17
+   packages as of 2026-09-30) via Dependabot PRs.

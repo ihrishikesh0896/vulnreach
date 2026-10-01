@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Python runtime dependencies (requirements.txt + pyproject.toml).
+  # requirements.txt is fully pinned, so Dependabot PRs here are what keeps
+  # the `dependency-audit` CI job's ratchet baseline moving down over time
+  # instead of just staying flat.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+
+  # GitHub Actions used in .github/workflows/*.yml
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # eBPF observer's own Go module (agents/ebpf/observer)
+  - package-ecosystem: "gomod"
+    directory: "/agents/ebpf/observer"
+    schedule:
+      interval: "weekly"

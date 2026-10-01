@@ -1,5 +1,49 @@
 # Changelog
 
+## [Unreleased] — 2026-10-01
+
+### Added
+
+#### eBPF contributor testability
+- **`tests/test_package_index.py`** (21 tests) and **`tests/test_observer_client.py`**
+  (12 tests) — `agents/ebpf/package_index.py` (322 lines, Rule R1 path→package
+  attribution) and `agents/ebpf/observer_client.py` (168 lines, the async
+  subprocess/NDJSON protocol client) previously had zero test coverage anywhere,
+  gated or not — the only thing that ever exercised them was
+  `tests/test_ebpf_observer_p0.py`, which is correctly restricted to Linux+root+
+  Docker+a built binary and therefore skips on most contributors' machines (Mac,
+  Windows). Neither module actually touches the kernel: `package_index.py` is pure
+  filesystem/zipfile walking, and `observer_client.py` just drives a subprocess
+  over stdio. The new tests exercise both for real — filesystem fixtures under
+  `tmp_path` for the former, a tiny Python "fake observer" script that speaks the
+  real NDJSON control-line protocol for the latter — rather than mocking the
+  interesting logic away. Runs anywhere Python does, no Docker/root/kernel needed.
+- `CONTRIBUTING.md` now documents which eBPF tests are cross-platform vs. which
+  genuinely require a privileged Linux host (the P0 kernel cgroup-isolation proof
+  — that one can't be faked, it's asserting a real kernel security boundary).
+
+#### CI — dependency vulnerability audit + SBOM
+- **`dependency-audit` CI job** (`.github/workflows/ci.yml`) — runs `pip-audit -r requirements.txt`
+  on every push/PR and generates a CycloneDX 1.4 SBOM of the project's own Python dependencies
+  (91 components). Closes the gap where a security-auditing tool had no dependency scanning on
+  itself.
+- **Ratchet gate, not a hard fail** — mirrors the existing coverage-gate pattern in the same file.
+  Baseline measured 2026-09-30: 93 unique known vulnerabilities across 17 of 91 pinned packages
+  (aiohttp 24, pillow 18, pyjwt 13, starlette 5, cryptography 6, others fewer). CI fails only if a
+  future dependency bump increases that count; lower `BASELINE` in the workflow as packages get
+  upgraded. Both the raw JSON report and the SBOM are uploaded as build artifacts on every run,
+  pass or fail, so the existing 93 stay visible instead of silently passing.
+- **`.github/dependabot.yml`** — weekly update PRs for `pip` (grouped), `github-actions`, and the
+  eBPF observer's `gomod` (`agents/ebpf/observer`). This is what's expected to move the ratchet
+  baseline down over time.
+
+#### Governance
+- **`GOVERNANCE.md`** — documents the project's current BDFL decision-making model, maintainer
+  list, and response-time targets. Closes a dangling reference: `OWASP.md` and `SECURITY.md`
+  previously pointed to CONTRIBUTING.md for "maintainer contact information," which was never
+  actually documented there.
+- `docs/incubator-readiness.md` OSS Governance section updated to reflect the new governance doc.
+
 ## [Unreleased] — 2026-08-09
 
 ### Added

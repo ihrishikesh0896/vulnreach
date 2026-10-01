@@ -105,6 +105,22 @@ Integration tests (require Docker and Postgres):
 pytest tests/integration/ -v --timeout=120
 ```
 
+### eBPF observer (`agents/ebpf/`)
+
+Most of `agents/ebpf/` is plain Python/async and has normal, unmocked unit tests you
+can run anywhere — no Linux, root, Docker, or kernel required:
+
+```bash
+pytest tests/test_package_index.py tests/test_observer_client.py tests/test_dynamic_observer_mode.py -v
+```
+
+Only the true kernel-level proof — that the observer's cgroup filtering actually
+isolates one container's syscalls from another (`tests/test_ebpf_observer_p0.py`) —
+needs a privileged Linux host, because that's a real kernel security boundary and
+can't be meaningfully faked. It's gated (`pytest.mark.skipif`) and runs for real in
+CI (`.github/workflows/ebpf-observer.yml`); see `agents/ebpf/observer/README.md` for
+how to run it yourself via Docker.
+
 ---
 
 ## Submitting a Pull Request
@@ -130,7 +146,8 @@ pytest tests/integration/ -v --timeout=120
    - How was it tested?
    - Any known limitations?
 
-PRs are reviewed by at least one maintainer before merge.
+PRs are reviewed by at least one maintainer before merge. See [GOVERNANCE.md](GOVERNANCE.md) for
+maintainer contact information and how project decisions get made.
 
 ---
 
