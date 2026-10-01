@@ -11,8 +11,6 @@ from __future__ import annotations
 import io
 import zipfile
 
-import pytest
-
 from agents.ebpf.package_index import (
     PackageEntry, PackageIndex, build_index, build_java, build_node, build_python,
 )
