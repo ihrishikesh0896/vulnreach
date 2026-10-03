@@ -142,7 +142,7 @@ curl http://localhost:8000/scan/<scan_id> \
 - **Runtime confirmation** — Docker-based coverage collection via `coverage.py`
 - **Taint tracking** — traces user input → vulnerable sinks (SQL, subprocess, YAML, pickle)
 - **LLM-steered DAST** — Claude/OpenAI/Ollama generates and validates exploit payloads (optional)
-- **CI/CD gates** — `policy.block_if` fails builds on confirmed critical findings
+- **CI/CD gates** — `policy.block_if` fails builds on confirmed critical findings; trigger and gate via `curl` — see [docs/ci-cd-gating.md](docs/ci-cd-gating.md)
 - **JWT auth** — multi-user, role-based access (admin / analyst)
 - **API tokens (API keys)** — long-lived machine auth for curl/CI (`Authorization: Bearer <API_KEY>`)
 - **PDF export** — `GET /scan/{id}/export/pdf`
@@ -174,8 +174,9 @@ Full methodology, evidence chain detail, and package-level breakdown: [docs/benc
 
 ### Usage
 
-- [USAGE_PACKAGE.md](USAGE_PACKAGE.md) — package/CLI installation, dependencies, startup, usage
+- [USAGE_PACKAGE.md](USAGE_PACKAGE.md) — `pip install` / Docker server installation and lifecycle (`start`/`stop`/`reload`); scanning is via the UI or `curl`, not the CLI
 - [USAGE_UI.md](USAGE_UI.md) — UI/server installation, dependencies, startup, usage
+- [docs/ci-cd-gating.md](docs/ci-cd-gating.md) — trigger and gate scans from a CI pipeline via `curl`
 
 ### Operators / Deployers
 

@@ -21,7 +21,7 @@ VulnReach adds a **runtime reachability layer** on top of SCA, proving at the co
 | **Open and transparent** | Apache 2.0 license; all analysis logic is auditable source code |
 | **Vendor-neutral** | Works with any Python web framework; LLM features default to `provider: none` and are fully optional |
 | **Developer-focused** | Outputs are P1–P4 prioritised, human-readable findings — not raw CVE dumps |
-| **CI/CD native** | Policy gates (`block_if`) allow scans to fail builds on confirmed critical findings |
+| **CI/CD native** | Policy gates (`block_if`) allow scans to fail builds on confirmed critical findings — triggered and gated via `curl` ([docs/ci-cd-gating.md](docs/ci-cd-gating.md)) |
 | **Defence in depth** | Five evidence layers: SCA → taint → AST → route exposure → runtime coverage |
 
 ---
